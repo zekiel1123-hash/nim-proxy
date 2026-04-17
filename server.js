@@ -31,7 +31,7 @@ const MODEL_MAPPING = {
   'gemini-pro': 'z-ai/glm-5.1',
   'deepseek-v3.2': 'deepseek-ai/deepseek-v3.2',
   'deepseek-v3.1-terminus': 'deepseek-ai/deepseek-v3.1-terminus',
-  'gemma-4-31b-it' 'google/gemma-4-31b-it'
+  'gemma-4-31b-it': 'google/gemma-4-31b-it'
 };
 
 // Health check endpoint

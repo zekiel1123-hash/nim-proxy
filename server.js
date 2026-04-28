@@ -30,7 +30,7 @@ const MODEL_MAPPING = {
   'claude-3-sonnet': 'z-ai/glm5',
   'gemini-pro': 'z-ai/glm-5.1',
   'deepseek-v3.2': 'deepseek-ai/deepseek-v3.2',
-  'deepseek-v3.1-terminus': 'deepseek-ai/deepseek-v3.1-terminus',
+  'deepseek-v4': 'deepseek-ai/deepseek-v4-pro',
   'gemma-4-31b-it': 'google/gemma-4-31b-it'
 };
 

@@ -24,13 +24,9 @@ const REASONING_EFFORT = "max";
 
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
-  'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-  'gpt-4': 'qwen/qwen3-coder-480b-a35b-instruct',
-  'gpt-4-turbo': 'moonshotai/kimi-k2.5',
-  'gpt-4o': 'deepseek-ai/deepseek-v3.1-terminus',
-  'claude-3-opus': 'openai/gpt-oss-120b',
-  'claude-3-sonnet': 'z-ai/glm5',
-  'gemini-pro': 'z-ai/glm-5.1',
+  'kimi-k2.5': 'moonshotai/kimi-k2.5',
+  'kimi-k2.6': 'moonshotai/kimi-k2.6',
+  'glm-5.1': 'z-ai/glm-5.1',
   'deepseek-v3.2': 'deepseek-ai/deepseek-v3.2',
   'deepseek-v4': 'deepseek-ai/deepseek-v4-pro',
   'gemma-4-31b-it': 'google/gemma-4-31b-it'

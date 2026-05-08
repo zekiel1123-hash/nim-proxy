@@ -20,8 +20,6 @@ const SHOW_REASONING = true; // Set to true to show reasoning with <think> tags
 // 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
 const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
 
-const REASONING_EFFORT = "max";
-
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
   'kimi-k2.5': 'moonshotai/kimi-k2.5',
@@ -99,7 +97,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       messages: messages,
       temperature: temperature || 0.6,
       max_tokens: max_tokens || 9024,
-      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true, reasoning_effort:"max" } } : undefined,
+      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
       stream: stream || true
     };
     

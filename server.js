@@ -42,7 +42,7 @@ const SHOW_REASONING = true;
 const ENABLE_THINKING_MODE = true;
 
 // DeepSeek reasoning effort
-const REASONING_EFFORT = 'high';
+const REASONING_EFFORT = 'med';
 
 // ============================================
 // MODEL MAPPING

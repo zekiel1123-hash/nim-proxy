@@ -49,7 +49,7 @@ const REASONING_EFFORT = 'med';
 // ============================================
 
 const MODEL_MAPPING = {
-  'glm-5.1': 'z-ai/glm-5.1',
+  'glm-5.1': 'z-ai/glm-5.2',
 
   'kimi-k2.6':
     'moonshotai/kimi-k2.6',

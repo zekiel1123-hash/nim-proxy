@@ -68,7 +68,7 @@ function buildThinkingConfig(model) {
     return {
       chat_template_kwargs: {
         enable_thinking: true,
-        clear_thinking: false
+        clear_thinking: true
       }
     };
   }
@@ -172,10 +172,10 @@ app.post(
         messages,
 
         temperature:
-          temperature ?? 0.7,
+          temperature ?? 1.0,
 
         max_tokens:
-          max_tokens ?? 8192,
+          max_tokens ?? 4096,
 
         stream: true,
 

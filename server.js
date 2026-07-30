@@ -2,9 +2,11 @@
 // OpenAI-compatible NVIDIA NIM proxy
 // STREAMING ONLY
 // Models:
-// - glm-5.1 (default fallback)
+// - glm-5.2 (default fallback)
 // - kimi-k2.6
 // - deepseek-v4
+// - nemotron-mini (roleplay/RAG-tuned, fast/small)
+// - minimax-m2.7 (roleplay/character-consistency tuned, large)
 
 const express = require('express');
 const cors = require('cors');
@@ -67,13 +69,25 @@ function sleep(ms) {
 // ============================================
 
 const MODEL_MAPPING = {
-  'glm-5.1': 'z-ai/glm-5.2',
+  'glm-5.2': 'z-ai/glm-5.2',
 
   'kimi-k2.6':
     'moonshotai/kimi-k2.6',
 
   'deepseek-v4':
-    'deepseek-ai/deepseek-v4-pro'
+    'deepseek-ai/deepseek-v4-pro',
+
+  // Small, fast, purpose-tuned for roleplay/RAG/function-calling per
+  // NVIDIA's own model card. Good low-latency option for quick in-character
+  // responses rather than long-form narrative.
+  'nemotron-mini':
+    'nvidia/nemotron-mini-4b-instruct',
+
+  // Larger MoE model; NVIDIA's catalog notes strengthened character
+  // consistency and emotional intelligence for interactive entertainment
+  // use cases, on top of general agentic/coding strength.
+  'minimax-m2.7':
+    'minimaxai/minimax-m2.7'
 };
 
 // ============================================
@@ -231,7 +245,7 @@ app.get('/health', (req, res) => {
     thinking_mode:
       ENABLE_THINKING_MODE,
     fallback_model:
-      'z-ai/glm-5.1'
+      'z-ai/glm-5.2'
   });
 });
 
@@ -272,12 +286,12 @@ app.post(
       } = req.body;
 
       // ============================================
-      // FALLBACK TO GLM-5.1
+      // FALLBACK TO GLM-5.2
       // ============================================
 
       const nimModel =
         MODEL_MAPPING[model] ||
-        'z-ai/glm-5.1';
+        'z-ai/glm-5.2';
 
       // ============================================
       // BUILD REQUEST
@@ -596,7 +610,7 @@ app.listen(PORT, () => {
   );
 
   console.log(
-    `Fallback model: z-ai/glm-5.1`
+    `Fallback model: z-ai/glm-5.2`
   );
 
   console.log(

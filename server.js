@@ -6,7 +6,7 @@
 // - kimi-k2.6
 // - deepseek-v4
 // - nemotron-mini (roleplay/RAG-tuned, fast/small)
-// - minimax-m2.7 (roleplay/character-consistency tuned, large)
+// - minimax-m3 (roleplay/character-consistency tuned, large)
 
 const express = require('express');
 const cors = require('cors');
@@ -86,8 +86,8 @@ const MODEL_MAPPING = {
   // Larger MoE model; NVIDIA's catalog notes strengthened character
   // consistency and emotional intelligence for interactive entertainment
   // use cases, on top of general agentic/coding strength.
-  'minimax-m2.7':
-    'minimaxai/minimax-m2.7'
+  'minimax-m3':
+    'minimaxai/minimax-m3'
 };
 
 // ============================================

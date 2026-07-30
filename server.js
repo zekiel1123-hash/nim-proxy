@@ -41,7 +41,7 @@ const NIM_API_KEY =
 const SHOW_REASONING = true;
 
 // Enable thinking mode
-const ENABLE_THINKING_MODE = true;
+const ENABLE_THINKING_MODE = false;
 
 // DeepSeek reasoning effort — valid values are 'none' | 'high' (default) | 'max'.
 // NOTE: 'low'/'medium' are NOT valid for NVIDIA's hosted deepseek-v4-pro; only

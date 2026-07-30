@@ -102,6 +102,56 @@ function extractReasoning(delta) {
 }
 
 // ============================================
+// ERROR HELPERS
+// ============================================
+
+// When axios is configured with responseType: 'stream', a non-2xx response
+// still comes back as a readable stream on error.response.data (NOT parsed
+// JSON). Trying to JSON.stringify that stream directly blows up with
+// "Converting circular structure to JSON" because it holds a reference back
+// to the underlying socket. This drains the stream into text (and tries to
+// parse it as JSON) so we can actually see/report what NVIDIA sent back.
+function readStreamToString(stream) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+
+    stream.on('data', (chunk) => {
+      data += chunk.toString();
+    });
+
+    stream.on('end', () => resolve(data));
+    stream.on('error', reject);
+  });
+}
+
+async function getSafeErrorPayload(error) {
+  const responseData = error?.response?.data;
+
+  // Stream case (responseType: 'stream') — drain it instead of stringifying.
+  if (responseData && typeof responseData.on === 'function') {
+    try {
+      const raw = await readStreamToString(responseData);
+
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw || error.message;
+      }
+    } catch (drainErr) {
+      console.error('Failed to read error stream:', drainErr);
+      return error.message;
+    }
+  }
+
+  // Already a plain object/string (non-streamed error) — safe to use as-is.
+  if (responseData) {
+    return responseData;
+  }
+
+  return error.message;
+}
+
+// ============================================
 // HEALTH
 // ============================================
 
@@ -417,11 +467,23 @@ app.post(
         }
       );
     } catch (error) {
+      const safePayload =
+        await getSafeErrorPayload(
+          error
+        );
+
       console.error(
         'Proxy error:',
-        error?.response?.data ||
-          error.message
+        safePayload
       );
+
+      // If SSE headers were already flushed to the client before this
+      // failed, we can no longer send a fresh status/JSON body — just
+      // close the connection instead of throwing a second error.
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
 
       res.status(
         error.response?.status ||
@@ -430,9 +492,7 @@ app.post(
 
       res.json({
         error: {
-          message:
-            error?.response?.data ||
-            error.message,
+          message: safePayload,
 
           type:
             'invalid_request_error',

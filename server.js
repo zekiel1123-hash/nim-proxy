@@ -44,6 +44,18 @@ const ENABLE_THINKING_MODE = true;
 // DeepSeek reasoning effort
 const REASONING_EFFORT = 'low';
 
+// Retry behavior for transient upstream failures (cold starts, gateway
+// timeouts). Only status codes in RETRYABLE_STATUS get retried — anything
+// else (e.g. 400/401/403) fails fast since retrying won't help.
+const MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 500;
+const REQUEST_TIMEOUT_MS = 60000;
+const RETRYABLE_STATUS = new Set([504, 502, 503]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ============================================
 // MODEL MAPPING
 // ============================================
@@ -122,6 +134,48 @@ function readStreamToString(stream) {
     stream.on('end', () => resolve(data));
     stream.on('error', reject);
   });
+}
+
+// Wraps the NVIDIA request with retry-on-transient-failure logic. Cold
+// starts on NVCF (NVIDIA's serverless backend) commonly surface as a 504
+// on the *first* call after idle time and succeed immediately on retry, so
+// this only retries 502/503/504 with a short exponential backoff. Anything
+// else (auth errors, bad request shape, etc.) is thrown immediately since
+// retrying won't fix it.
+async function postToNimWithRetry(url, payload, headers) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await axios.post(url, payload, {
+        headers,
+        responseType: 'stream',
+        timeout: REQUEST_TIMEOUT_MS
+      });
+    } catch (error) {
+      lastError = error;
+
+      const status = error?.response?.status;
+      const isRetryable = status
+        ? RETRYABLE_STATUS.has(status)
+        : error.code === 'ECONNABORTED'; // client-side timeout
+
+      if (!isRetryable || attempt === MAX_RETRIES) {
+        throw error;
+      }
+
+      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+
+      console.warn(
+        `NIM request failed (status ${status || error.code}), retrying in ${delay}ms ` +
+          `[attempt ${attempt + 1}/${MAX_RETRIES}]`
+      );
+
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
 }
 
 async function getSafeErrorPayload(error) {
@@ -241,23 +295,18 @@ app.post(
       // ============================================
 
       const response =
-        await axios.post(
+        await postToNimWithRetry(
           `${NIM_API_BASE}/chat/completions`,
           nimRequest,
           {
-            headers: {
-              Authorization:
-                `Bearer ${NIM_API_KEY}`,
+            Authorization:
+              `Bearer ${NIM_API_KEY}`,
 
-              'Content-Type':
-                'application/json',
+            'Content-Type':
+              'application/json',
 
-              Accept:
-                'text/event-stream'
-            },
-
-            responseType:
-              'stream'
+            Accept:
+              'text/event-stream'
           }
         );
 

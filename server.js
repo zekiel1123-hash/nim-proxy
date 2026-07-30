@@ -41,8 +41,14 @@ const SHOW_REASONING = true;
 // Enable thinking mode
 const ENABLE_THINKING_MODE = true;
 
-// DeepSeek reasoning effort
-const REASONING_EFFORT = 'low';
+// DeepSeek reasoning effort — valid values are 'none' | 'high' (default) | 'max'.
+// NOTE: 'low'/'medium' are NOT valid for NVIDIA's hosted deepseek-v4-pro; only
+// some third-party providers (e.g. Together AI) alias those to 'high'.
+// GLM and Kimi don't have effort *levels* — they only expose a boolean
+// thinking on/off (see buildThinkingConfig below), so 'high' here is the
+// closest DeepSeek equivalent to "thinking fully enabled" without the extra
+// latency/token cost of 'max'.
+const REASONING_EFFORT = 'high';
 
 // Retry behavior for transient upstream failures (cold starts, gateway
 // timeouts). Only status codes in RETRYABLE_STATUS get retried — anything
@@ -96,9 +102,16 @@ function buildThinkingConfig(model) {
 
   // DeepSeek
   if (model.includes('deepseek')) {
+    // NVIDIA's hosted deepseek-v4-pro/flash reportedly ignores a top-level
+    // `reasoning_effort` field (see: NVIDIA dev forums thread on this).
+    // The documented/working shape nests it inside chat_template_kwargs
+    // alongside `thinking: true`, matching how GLM/Kimi pass thinking config.
     return {
-      reasoning_effort:
-        REASONING_EFFORT
+      chat_template_kwargs: {
+        thinking: true,
+        reasoning_effort:
+          REASONING_EFFORT
+      }
     };
   }
 

@@ -305,8 +305,7 @@ app.post(
         temperature:
           temperature ?? 1.0,
 
-        max_tokens:
-          max_tokens ?? 4096,
+        max_tokens: 2048,
 
         stream: true,
 

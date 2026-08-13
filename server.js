@@ -1,12 +1,25 @@
 // server.js
 // OpenAI-compatible NVIDIA NIM proxy
 // STREAMING ONLY
+//
 // Models:
-// - glm-5.2 (default fallback)
-// - kimi-k2.6
-// - deepseek-v4
-// - nemotron-mini (roleplay/RAG-tuned, fast/small)
-// - minimax-m3 (roleplay/character-consistency tuned, large)
+// - glm-5.1       -> z-ai/glm-5.2
+// - kimi-k2.6     -> moonshotai/kimi-k2.6
+// - deepseek-v4   -> deepseek-ai/deepseek-v4-pro
+// - stepfun-3.7   -> stepfun-ai/step-3.7-flash
+//
+// StepFun special handling:
+// Step-3.7-Flash may stream reasoning as normal content and
+// may emit </think> without first emitting <think>.
+// This proxy normalizes that stream so clients receive:
+//
+//   <think>
+//   reasoning...
+//   </think>
+//
+// followed by the actual answer.
+//
+// STREAMING ONLY
 
 const express = require('express');
 const cors = require('cors');
@@ -15,16 +28,24 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ============================================
+// MIDDLEWARE
+// ============================================
+
 app.use(cors());
 
-app.use(express.json({
-  limit: '100mb'
-}));
+app.use(
+  express.json({
+    limit: '100mb'
+  })
+);
 
-app.use(express.urlencoded({
-  extended: true,
-  limit: '100mb'
-}));
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: '100mb'
+  })
+);
 
 // ============================================
 // CONFIG
@@ -40,36 +61,22 @@ const NIM_API_KEY =
 // Display reasoning in <think> blocks
 const SHOW_REASONING = true;
 
-// Enable thinking mode
+// Enable model-specific thinking configuration
 const ENABLE_THINKING_MODE = true;
 
-// DeepSeek reasoning effort — valid values are 'none' | 'high' (default) | 'max'.
-// NOTE: 'low'/'medium' are NOT valid for NVIDIA's hosted deepseek-v4-pro; only
-// some third-party providers (e.g. Together AI) alias those to 'high'.
-// GLM and Kimi don't have effort *levels* — they only expose a boolean
-// thinking on/off (see buildThinkingConfig below), so 'high' here is the
-// closest DeepSeek equivalent to "thinking fully enabled" without the extra
-// latency/token cost of 'max'.
-const REASONING_EFFORT = 'high';
+// DeepSeek reasoning effort
+const REASONING_EFFORT = 'low';
 
-// Retry behavior for transient upstream failures (cold starts, gateway
-// timeouts). Only status codes in RETRYABLE_STATUS get retried — anything
-// else (e.g. 400/401/403) fails fast since retrying won't help.
-const MAX_RETRIES = 2;
-const RETRY_BASE_DELAY_MS = 500;
-const REQUEST_TIMEOUT_MS = 60000;
-const RETRYABLE_STATUS = new Set([504, 502, 503]);
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// Default fallback
+const FALLBACK_MODEL = 'z-ai/glm-5.2';
 
 // ============================================
 // MODEL MAPPING
 // ============================================
 
 const MODEL_MAPPING = {
-  'glm-5.2': 'z-ai/glm-5.2',
+  'glm-5.1':
+    'z-ai/glm-5.2',
 
   'kimi-k2.6':
     'moonshotai/kimi-k2.6',
@@ -78,28 +85,74 @@ const MODEL_MAPPING = {
     'deepseek-ai/deepseek-v4-pro',
 
   'stepfun-3.7':
-    'stepfun-ai/step-3.7-flash',
-
-  // Small, fast, purpose-tuned for roleplay/RAG/function-calling per
-  // NVIDIA's own model card. Good low-latency option for quick in-character
-  // responses rather than long-form narrative.
-  'nemotron-mini':
-    'nvidia/nemotron-mini-4b-instruct',
-
-  // Larger MoE model; NVIDIA's catalog notes strengthened character
-  // consistency and emotional intelligence for interactive entertainment
-  // use cases, on top of general agentic/coding strength.
-  'minimax-m3':
-    'minimaxai/minimax-m3'
+    'stepfun-ai/step-3.7-flash'
 };
 
 // ============================================
-// MODEL CONFIG
+// MODEL HELPERS
+// ============================================
+
+function isStepFunModel(model) {
+  return (
+    typeof model === 'string' &&
+    model.toLowerCase().includes('step-3.7-flash')
+  );
+}
+
+function isGLMModel(model) {
+  return (
+    typeof model === 'string' &&
+    model.toLowerCase().includes('glm')
+  );
+}
+
+function isKimiModel(model) {
+  return (
+    typeof model === 'string' &&
+    model.toLowerCase().includes('kimi')
+  );
+}
+
+function isDeepSeekModel(model) {
+  return (
+    typeof model === 'string' &&
+    model.toLowerCase().includes('deepseek')
+  );
+}
+
+// ============================================
+// THINKING CONFIG
 // ============================================
 
 function buildThinkingConfig(model) {
+  // ============================================
+  // STEP-3.7-FLASH
+  // ============================================
+  //
+  // NVIDIA's current Step-3.7-Flash API example
+  // does not specify a chat_template_kwargs
+  // thinking parameter.
+  //
+  // Do NOT send:
+  //
+  //   thinking: true
+  //   enable_thinking: true
+  //
+  // to StepFun unless NVIDIA documents support
+  // for those parameters.
+  //
+  // The proxy instead normalizes StepFun's
+  // streamed reasoning markers below.
+  //
+  if (isStepFunModel(model)) {
+    return {};
+  }
+
+  // ============================================
   // GLM
-  if (model.includes('glm')) {
+  // ============================================
+
+  if (isGLMModel(model)) {
     return {
       chat_template_kwargs: {
         enable_thinking: true,
@@ -108,8 +161,11 @@ function buildThinkingConfig(model) {
     };
   }
 
-  // Kimi
-  if (model.includes('kimi')) {
+  // ============================================
+  // KIMI
+  // ============================================
+
+  if (isKimiModel(model)) {
     return {
       chat_template_kwargs: {
         thinking: true
@@ -117,23 +173,23 @@ function buildThinkingConfig(model) {
     };
   }
 
-  // DeepSeek
-  if (model.includes('deepseek')) {
-    // NVIDIA's hosted deepseek-v4-pro/flash reportedly ignores a top-level
-    // `reasoning_effort` field (see: NVIDIA dev forums thread on this).
-    // The documented/working shape nests it inside chat_template_kwargs
-    // alongside `thinking: true`, matching how GLM/Kimi pass thinking config.
+  // ============================================
+  // DEEPSEEK
+  // ============================================
+
+  if (isDeepSeekModel(model)) {
     return {
-      chat_template_kwargs: {
-        thinking: true,
-        reasoning_effort:
-          REASONING_EFFORT
-      }
+      reasoning_effort:
+        REASONING_EFFORT
     };
   }
 
   return {};
 }
+
+// ============================================
+// REASONING EXTRACTION
+// ============================================
 
 function extractReasoning(delta) {
   return (
@@ -144,133 +200,564 @@ function extractReasoning(delta) {
 }
 
 // ============================================
-// ERROR HELPERS
+// SAFE ERROR SERIALIZATION
 // ============================================
-
-// When axios is configured with responseType: 'stream', a non-2xx response
-// still comes back as a readable stream on error.response.data (NOT parsed
-// JSON). Trying to JSON.stringify that stream directly blows up with
-// "Converting circular structure to JSON" because it holds a reference back
-// to the underlying socket. This drains the stream into text (and tries to
-// parse it as JSON) so we can actually see/report what NVIDIA sent back.
-function readStreamToString(stream) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-
-    stream.on('data', (chunk) => {
-      data += chunk.toString();
-    });
-
-    stream.on('end', () => resolve(data));
-    stream.on('error', reject);
-  });
-}
-
-// Wraps the NVIDIA request with retry-on-transient-failure logic. Cold
-// starts on NVCF (NVIDIA's serverless backend) commonly surface as a 504
-// on the *first* call after idle time and succeed immediately on retry, so
-// this only retries 502/503/504 with a short exponential backoff. Anything
-// else (auth errors, bad request shape, etc.) is thrown immediately since
-// retrying won't fix it.
-async function postToNimWithRetry(url, payload, headers) {
-  let lastError;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await axios.post(url, payload, {
-        headers,
-        responseType: 'stream',
-        timeout: REQUEST_TIMEOUT_MS
-      });
-    } catch (error) {
-      lastError = error;
-
-      const status = error?.response?.status;
-      const isRetryable = status
-        ? RETRYABLE_STATUS.has(status)
-        : error.code === 'ECONNABORTED'; // client-side timeout
-
-      if (!isRetryable || attempt === MAX_RETRIES) {
-        throw error;
-      }
-
-      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-
-      console.warn(
-        `NIM request failed (status ${status || error.code}), retrying in ${delay}ms ` +
-          `[attempt ${attempt + 1}/${MAX_RETRIES}]`
-      );
-
-      await sleep(delay);
-    }
-  }
-
-  throw lastError;
-}
+//
+// IMPORTANT:
+//
+// Axios response.data can be a Node.js stream.
+// Trying to put that object directly into JSON:
+//
+//   res.json({
+//     error: error.response.data
+//   })
+//
+// can produce:
+//
+//   TypeError: Converting circular structure to JSON
+//
+// Therefore we always convert errors into plain strings/objects.
+//
 
 async function getSafeErrorPayload(error) {
-  const responseData = error?.response?.data;
+  const status =
+    error?.response?.status || 500;
 
-  // Stream case (responseType: 'stream') — drain it instead of stringifying.
-  if (responseData && typeof responseData.on === 'function') {
+  const responseData =
+    error?.response?.data;
+
+  let message =
+    error?.message ||
+    'Unknown proxy error';
+
+  // Axios response data may be a stream
+  if (
+    responseData &&
+    typeof responseData.on === 'function'
+  ) {
     try {
-      const raw = await readStreamToString(responseData);
+      let body = '';
 
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return raw || error.message;
+      await new Promise((resolve) => {
+        let settled = false;
+
+        const finish = () => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        };
+
+        responseData.setEncoding?.('utf8');
+
+        responseData.on(
+          'data',
+          (chunk) => {
+            body += chunk.toString();
+          }
+        );
+
+        responseData.on(
+          'end',
+          finish
+        );
+
+        responseData.on(
+          'error',
+          finish
+        );
+      });
+
+      if (body) {
+        try {
+          message = JSON.parse(body);
+        } catch {
+          message = body;
+        }
       }
-    } catch (drainErr) {
-      console.error('Failed to read error stream:', drainErr);
-      return error.message;
+    } catch {
+      message =
+        error?.message ||
+        'NVIDIA request failed';
     }
   }
 
-  // Already a plain object/string (non-streamed error) — safe to use as-is.
-  if (responseData) {
-    return responseData;
+  // Normal Axios JSON response
+  else if (
+    responseData !== undefined &&
+    responseData !== null
+  ) {
+    if (
+      typeof responseData === 'string'
+    ) {
+      message = responseData;
+    } else {
+      try {
+        message =
+          JSON.stringify(
+            responseData
+          );
+      } catch {
+        message =
+          error?.message ||
+          'NVIDIA request failed';
+      }
+    }
   }
 
-  return error.message;
+  return {
+    status,
+    body: {
+      error: {
+        message,
+        type:
+          'invalid_request_error',
+        code: status
+      }
+    }
+  };
+}
+
+// ============================================
+// WRITE SSE
+// ============================================
+
+function writeSSE(res, data) {
+  if (res.writableEnded) {
+    return;
+  }
+
+  res.write(
+    `data: ${JSON.stringify(data)}\n\n`
+  );
+}
+
+function writeDone(res) {
+  if (res.writableEnded) {
+    return;
+  }
+
+  res.write('data: [DONE]\n\n');
+}
+
+// ============================================
+// CREATE CONTENT CHUNK
+// ============================================
+
+function createContentChunk(content) {
+  return {
+    choices: [
+      {
+        delta: {
+          content
+        }
+      }
+    ]
+  };
+}
+
+// ============================================
+// NORMALIZE REASONING MARKERS
+// ============================================
+//
+// This function handles:
+//
+// 1. Separate NVIDIA reasoning fields:
+//
+//    delta.reasoning
+//    delta.reasoning_content
+//
+// 2. Models that put:
+//
+//    <think>...</think>
+//
+//    directly inside delta.content.
+//
+// 3. StepFun behavior where the stream can contain:
+//
+//    reasoning...
+//    </think>
+//
+//    without:
+//
+//    <think>
+//
+// For StepFun, content before </think> is buffered.
+// Once </think> arrives, we know that buffered content
+// was reasoning and can safely emit:
+//
+//    <think>
+//    [buffered reasoning]
+//    </think>
+//
+// This avoids accidentally displaying reasoning as
+// normal answer text.
+//
+
+class ReasoningNormalizer {
+  constructor(model) {
+    this.model = model;
+
+    this.stepFun =
+      isStepFunModel(model);
+
+    this.reasoningOpen = false;
+
+    this.reasoningSeen = false;
+
+    this.stepFunBuffer = '';
+
+    this.stepFunFinishedThinking =
+      false;
+
+    this.stepFunExplicitThink =
+      false;
+  }
+
+  // ------------------------------------------
+  // STEP FUNCTION
+  // ------------------------------------------
+
+  processStepFunContent(content) {
+    if (!content) {
+      return '';
+    }
+
+    // Once thinking has already finished,
+    // everything is ordinary answer content.
+    if (
+      this.stepFunFinishedThinking
+    ) {
+      return content;
+    }
+
+    // ------------------------------------------
+    // If an explicit <think> appears
+    // ------------------------------------------
+
+    if (
+      content.includes('<think>')
+    ) {
+      this.stepFunExplicitThink =
+        true;
+
+      this.reasoningOpen = true;
+
+      this.reasoningSeen = true;
+
+      // If we already buffered something before
+      // seeing <think>, prepend it after the tag.
+      const parts =
+        content.split('<think>');
+
+      let output = '';
+
+      if (this.stepFunBuffer) {
+        output +=
+          '<think>\n' +
+          this.stepFunBuffer;
+
+        this.stepFunBuffer = '';
+      } else {
+        output +=
+          '<think>\n';
+      }
+
+      output += parts[1] || '';
+
+      // Handle closing tag in the same chunk.
+      if (
+        output.includes('</think>')
+      ) {
+        const closeIndex =
+          output.indexOf(
+            '</think>'
+          );
+
+        const beforeClose =
+          output.slice(
+            0,
+            closeIndex
+          );
+
+        const afterClose =
+          output.slice(
+            closeIndex +
+              '</think>'.length
+          );
+
+        this.reasoningOpen = false;
+
+        this.stepFunFinishedThinking =
+          true;
+
+        return (
+          beforeClose +
+          '</think>\n\n' +
+          afterClose
+        );
+      }
+
+      return output;
+    }
+
+    // ------------------------------------------
+    // Explicit thinking already started
+    // ------------------------------------------
+
+    if (
+      this.stepFunExplicitThink ||
+      this.reasoningOpen
+    ) {
+      this.reasoningSeen = true;
+
+      if (
+        content.includes('</think>')
+      ) {
+        const closeIndex =
+          content.indexOf(
+            '</think>'
+          );
+
+        const beforeClose =
+          content.slice(
+            0,
+            closeIndex
+          );
+
+        const afterClose =
+          content.slice(
+            closeIndex +
+              '</think>'.length
+          );
+
+        this.reasoningOpen = false;
+
+        this.stepFunFinishedThinking =
+          true;
+
+        return (
+          beforeClose +
+          '</think>\n\n' +
+          afterClose
+        );
+      }
+
+      return content;
+    }
+
+    // ------------------------------------------
+    // No opening tag yet
+    //
+    // Buffer the content because it may be
+    // reasoning. We only know for certain when
+    // </think> arrives.
+    // ------------------------------------------
+
+    const combined =
+      this.stepFunBuffer +
+      content;
+
+    const closeIndex =
+      combined.indexOf(
+        '</think>'
+      );
+
+    // No closing tag yet.
+    // Keep buffering.
+    if (closeIndex === -1) {
+      this.stepFunBuffer =
+        combined;
+
+      return '';
+    }
+
+    // ------------------------------------------
+    // We found </think> without <think>
+    // ------------------------------------------
+
+    const reasoningText =
+      combined.slice(
+        0,
+        closeIndex
+      );
+
+    const answerText =
+      combined.slice(
+        closeIndex +
+          '</think>'.length
+      );
+
+    this.stepFunBuffer = '';
+
+    this.reasoningSeen = true;
+
+    this.reasoningOpen = false;
+
+    this.stepFunFinishedThinking =
+      true;
+
+    return (
+      '<think>\n' +
+      reasoningText +
+      '</think>\n\n' +
+      answerText
+    );
+  }
+
+  // ------------------------------------------
+  // GENERAL NORMALIZATION
+  // ------------------------------------------
+
+  processContent(content) {
+    if (!content) {
+      return '';
+    }
+
+    // StepFun needs special handling.
+    if (this.stepFun) {
+      return this.processStepFunContent(
+        content
+      );
+    }
+
+    // Other models:
+    // preserve explicit tags if supplied.
+    return content;
+  }
+
+  // ------------------------------------------
+  // SEPARATE REASONING FIELD
+  // ------------------------------------------
+
+  processSeparateReasoning(
+    reasoning
+  ) {
+    if (
+      !reasoning ||
+      !SHOW_REASONING
+    ) {
+      return '';
+    }
+
+    if (
+      !this.reasoningOpen
+    ) {
+      this.reasoningOpen = true;
+
+      this.reasoningSeen = true;
+
+      return (
+        '<think>\n' +
+        reasoning
+      );
+    }
+
+    return reasoning;
+  }
+
+  // ------------------------------------------
+  // CLOSE AT END
+  // ------------------------------------------
+
+  finish() {
+    let output = '';
+
+    // ------------------------------------------
+    // StepFun:
+    //
+    // If no </think> ever arrived, do NOT blindly
+    // label the buffered text as reasoning.
+    //
+    // We instead return it as normal content.
+    // ------------------------------------------
+
+    if (
+      this.stepFun &&
+      this.stepFunBuffer
+    ) {
+      output +=
+        this.stepFunBuffer;
+
+      this.stepFunBuffer = '';
+    }
+
+    // ------------------------------------------
+    // Separate reasoning streams
+    // ------------------------------------------
+
+    if (
+      SHOW_REASONING &&
+      this.reasoningOpen
+    ) {
+      output +=
+        '\n</think>\n';
+
+      this.reasoningOpen = false;
+    }
+
+    return output;
+  }
 }
 
 // ============================================
 // HEALTH
 // ============================================
 
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    streaming_only: true,
-    reasoning_display:
-      SHOW_REASONING,
-    thinking_mode:
-      ENABLE_THINKING_MODE,
-    fallback_model:
-      'z-ai/glm-5.2'
-  });
-});
+app.get(
+  '/health',
+  (req, res) => {
+    res.json({
+      status: 'ok',
+
+      streaming_only: true,
+
+      reasoning_display:
+        SHOW_REASONING,
+
+      thinking_mode:
+        ENABLE_THINKING_MODE,
+
+      fallback_model:
+        FALLBACK_MODEL,
+
+      models:
+        Object.keys(
+          MODEL_MAPPING
+        )
+    });
+  }
+);
 
 // ============================================
 // MODELS
 // ============================================
 
-app.get('/v1/models', (req, res) => {
-  res.json({
-    object: 'list',
+app.get(
+  '/v1/models',
+  (req, res) => {
+    res.json({
+      object: 'list',
 
-    data: Object.keys(
-      MODEL_MAPPING
-    ).map((model) => ({
-      id: model,
-      object: 'model',
-      created: Date.now(),
-      owned_by:
-        'nvidia-nim-proxy'
-    }))
-  });
-});
+      data:
+        Object.keys(
+          MODEL_MAPPING
+        ).map((model) => ({
+          id: model,
+
+          object: 'model',
+
+          created:
+            Math.floor(
+              Date.now() / 1000
+            ),
+
+          owned_by:
+            'nvidia-nim-proxy'
+        }))
+    });
+  }
+);
 
 // ============================================
 // CHAT COMPLETIONS
@@ -280,25 +767,49 @@ app.get('/v1/models', (req, res) => {
 app.post(
   '/v1/chat/completions',
   async (req, res) => {
+    let upstreamResponse = null;
+
     try {
       const {
         model,
         messages,
         temperature,
-        max_tokens
+        max_tokens,
+        top_p,
+        seed
       } = req.body;
 
-      // ============================================
-      // FALLBACK TO GLM-5.2
-      // ============================================
+      // ==========================================
+      // VALIDATE MESSAGES
+      // ==========================================
+
+      if (
+        !Array.isArray(messages)
+      ) {
+        return res.status(400).json({
+          error: {
+            message:
+              '`messages` must be an array',
+
+            type:
+              'invalid_request_error',
+
+            code: 400
+          }
+        });
+      }
+
+      // ==========================================
+      // FALLBACK
+      // ==========================================
 
       const nimModel =
         MODEL_MAPPING[model] ||
-        'z-ai/glm-5.2';
+        FALLBACK_MODEL;
 
-      // ============================================
+      // ==========================================
       // BUILD REQUEST
-      // ============================================
+      // ==========================================
 
       const nimRequest = {
         model: nimModel,
@@ -308,9 +819,17 @@ app.post(
         temperature:
           temperature ?? 1.0,
 
-        max_tokens: 2048,
+        top_p:
+          top_p ?? 0.95,
+
+        max_tokens:
+          max_tokens ?? 16384,
 
         stream: true,
+
+        ...(seed !== undefined
+          ? { seed }
+          : {}),
 
         ...(ENABLE_THINKING_MODE
           ? buildThinkingConfig(
@@ -319,38 +838,70 @@ app.post(
           : {})
       };
 
-      // ============================================
-      // NVIDIA REQUEST
-      // ============================================
+      console.log(
+        `[NIM] ${model || 'unknown'} -> ${nimModel}`
+      );
 
-      const response =
-        await postToNimWithRetry(
+      // ==========================================
+      // NVIDIA REQUEST
+      // ==========================================
+
+      upstreamResponse =
+        await axios.post(
           `${NIM_API_BASE}/chat/completions`,
           nimRequest,
           {
-            Authorization:
-              `Bearer ${NIM_API_KEY}`,
+            headers: {
+              Authorization:
+                `Bearer ${NIM_API_KEY}`,
 
-            'Content-Type':
-              'application/json',
+              'Content-Type':
+                'application/json',
 
-            Accept:
-              'text/event-stream'
+              Accept:
+                'text/event-stream'
+            },
+
+            responseType:
+              'stream',
+
+            // Don't let Axios transform
+            // the streaming response.
+            transformResponse: [
+              (data) => data
+            ],
+
+            // Allow us to handle NVIDIA
+            // HTTP errors ourselves.
+            validateStatus:
+              (status) =>
+                status >= 200 &&
+                status < 300,
+
+            timeout: 0,
+
+            maxContentLength:
+              Infinity,
+
+            maxBodyLength:
+              Infinity
           }
         );
 
-      // ============================================
+      // ==========================================
       // SSE HEADERS
-      // ============================================
+      // ==========================================
+
+      res.status(200);
 
       res.setHeader(
         'Content-Type',
-        'text/event-stream'
+        'text/event-stream; charset=utf-8'
       );
 
       res.setHeader(
         'Cache-Control',
-        'no-cache'
+        'no-cache, no-transform'
       );
 
       res.setHeader(
@@ -358,228 +909,445 @@ app.post(
         'keep-alive'
       );
 
-      // ============================================
-      // STREAM HANDLING
-      // ============================================
+      res.setHeader(
+        'X-Accel-Buffering',
+        'no'
+      );
+
+      // Flush headers immediately.
+      res.flushHeaders?.();
+
+      // ==========================================
+      // REASONING NORMALIZER
+      // ==========================================
+
+      const normalizer =
+        new ReasoningNormalizer(
+          nimModel
+        );
+
+      // ==========================================
+      // STREAM STATE
+      // ==========================================
 
       let buffer = '';
 
-      let reasoningOpen =
-        false;
+      let finished = false;
 
-      response.data.on(
-        'data',
-        (chunk) => {
-          buffer +=
-            chunk.toString();
+      // ==========================================
+      // CLEANUP
+      // ==========================================
 
-          const lines =
-            buffer.split('\n');
+      const cleanup =
+        () => {
+          if (
+            upstreamResponse?.data &&
+            typeof upstreamResponse
+              .data.destroy ===
+              'function'
+          ) {
+            upstreamResponse.data.destroy();
+          }
+        };
 
-          buffer =
-            lines.pop() || '';
-
-          for (const line of lines) {
-            if (
-              !line.startsWith(
-                'data: '
-              )
-            ) {
-              continue;
-            }
-
-            // ============================================
-            // DONE
-            // ============================================
-
-            if (
-              line.includes(
-                '[DONE]'
-              )
-            ) {
-              // close think block if needed
-              if (
-                SHOW_REASONING &&
-                reasoningOpen
-              ) {
-                const closeChunk =
-                  {
-                    choices: [
-                      {
-                        delta: {
-                          content:
-                            '\n</think>\n'
-                        }
-                      }
-                    ]
-                  };
-
-                res.write(
-                  `data: ${JSON.stringify(
-                    closeChunk
-                  )}\n\n`
-                );
-
-                reasoningOpen =
-                  false;
-              }
-
-              res.write(
-                'data: [DONE]\n\n'
-              );
-
-              res.end();
-
-              return;
-            }
-
-            try {
-              const data =
-                JSON.parse(
-                  line.slice(6)
-                );
-
-              const delta =
-                data?.choices?.[0]
-                  ?.delta || {};
-
-              const reasoning =
-                extractReasoning(
-                  delta
-                );
-
-              const content =
-                delta.content || '';
-
-              let output = '';
-
-              // ============================================
-              // REASONING
-              // ============================================
-
-              if (
-                SHOW_REASONING &&
-                reasoning
-              ) {
-                if (
-                  !reasoningOpen
-                ) {
-                  output +=
-                    '<think>\n';
-
-                  reasoningOpen =
-                    true;
-                }
-
-                output += reasoning;
-              }
-
-              // ============================================
-              // CONTENT
-              // ============================================
-
-              if (content) {
-                if (
-                  SHOW_REASONING &&
-                  reasoningOpen
-                ) {
-                  output +=
-                    '\n</think>\n\n';
-
-                  reasoningOpen =
-                    false;
-                }
-
-                output += content;
-              }
-
-              // ============================================
-              // REPLACE CONTENT
-              // ============================================
-
-              if (output) {
-                data.choices[0].delta.content =
-                  output;
-              }
-
-              // remove raw reasoning
-              delete data
-                .choices[0].delta
-                .reasoning;
-
-              delete data
-                .choices[0].delta
-                .reasoning_content;
-
-              res.write(
-                `data: ${JSON.stringify(
-                  data
-                )}\n\n`
-              );
-            } catch (err) {
-              console.error(
-                'Parse error:',
-                err
-              );
-            }
+      req.on(
+        'close',
+        () => {
+          if (!res.writableEnded) {
+            cleanup();
           }
         }
       );
 
-      response.data.on(
+      // ==========================================
+      // HANDLE ONE SSE DATA LINE
+      // ==========================================
+
+      const processLine =
+        (line) => {
+          const trimmed =
+            line.trim();
+
+          // Ignore blank lines.
+          if (!trimmed) {
+            return;
+          }
+
+          // NVIDIA uses:
+          //
+          // data: {...}
+          //
+          if (
+            !trimmed.startsWith(
+              'data:'
+            )
+          ) {
+            return;
+          }
+
+          const payload =
+            trimmed
+              .slice(5)
+              .trim();
+
+          // ========================================
+          // DONE
+          // ========================================
+
+          if (
+            payload === '[DONE]'
+          ) {
+            // Flush any remaining StepFun
+            // buffered content.
+            const finalContent =
+              normalizer.finish();
+
+            if (finalContent) {
+              writeSSE(
+                res,
+                createContentChunk(
+                  finalContent
+                )
+              );
+            }
+
+            writeDone(res);
+
+            finished = true;
+
+            if (
+              !res.writableEnded
+            ) {
+              res.end();
+            }
+
+            return;
+          }
+
+          // ========================================
+          // PARSE JSON
+          // ========================================
+
+          let data;
+
+          try {
+            data =
+              JSON.parse(payload);
+          } catch (err) {
+            console.error(
+              '[SSE] JSON parse error:',
+              err.message
+            );
+
+            return;
+          }
+
+          // ========================================
+          // CHOICES / DELTA
+          // ========================================
+
+          const choice =
+            data?.choices?.[0];
+
+          const delta =
+            choice?.delta;
+
+          if (!delta) {
+            // Some providers may send metadata
+            // chunks without delta content.
+            writeSSE(res, data);
+
+            return;
+          }
+
+          // ========================================
+          // RAW REASONING
+          // ========================================
+
+          const reasoning =
+            extractReasoning(
+              delta
+            );
+
+          // ========================================
+          // RAW CONTENT
+          // ========================================
+
+          const content =
+            typeof delta.content ===
+            'string'
+              ? delta.content
+              : '';
+
+          let output = '';
+
+          // ========================================
+          // REASONING FIELD
+          // ========================================
+
+          if (
+            SHOW_REASONING &&
+            reasoning
+          ) {
+            output +=
+              normalizer.processSeparateReasoning(
+                reasoning
+              );
+          }
+
+          // ========================================
+          // CONTENT
+          // ========================================
+
+          if (content) {
+            output +=
+              normalizer.processContent(
+                content
+              );
+          }
+
+          // ========================================
+          // COPY DATA
+          // ========================================
+          //
+          // Do not mutate the provider object
+          // unnecessarily.
+          //
+
+          if (
+            output
+          ) {
+            data.choices[0].delta =
+              {
+                ...delta,
+
+                content:
+                  output
+              };
+          } else {
+            // Keep the original delta except
+            // remove raw reasoning fields.
+            data.choices[0].delta =
+              {
+                ...delta
+              };
+          }
+
+          // ========================================
+          // REMOVE RAW REASONING
+          // ========================================
+
+          delete data
+            .choices[0]
+            .delta
+            .reasoning;
+
+          delete data
+            .choices[0]
+            .delta
+            .reasoning_content;
+
+          // ========================================
+          // DON'T SEND EMPTY DELTAS
+          // ========================================
+
+          const finalDelta =
+            data
+              ?.choices?.[0]
+              ?.delta;
+
+          const hasContent =
+            finalDelta &&
+            Object.keys(
+              finalDelta
+            ).length > 0;
+
+          if (
+            !hasContent &&
+            !output
+          ) {
+            // Preserve metadata chunks that contain
+            // other useful fields.
+            const choiceCopy =
+              {
+                ...data.choices[0]
+              };
+
+            delete choiceCopy.delta;
+
+            if (
+              Object.keys(
+                choiceCopy
+              ).length === 0
+            ) {
+              return;
+            }
+          }
+
+          // ========================================
+          // SEND
+          // ========================================
+
+          writeSSE(
+            res,
+            data
+          );
+        };
+
+      // ==========================================
+      // STREAM DATA
+      // ==========================================
+
+      upstreamResponse.data.on(
+        'data',
+        (chunk) => {
+          if (
+            finished ||
+            res.writableEnded
+          ) {
+            return;
+          }
+
+          buffer +=
+            chunk.toString(
+              'utf8'
+            );
+
+          const lines =
+            buffer.split(
+              /\r?\n/
+            );
+
+          // Keep incomplete line.
+          buffer =
+            lines.pop() || '';
+
+          for (
+            const line of lines
+          ) {
+            if (
+              finished ||
+              res.writableEnded
+            ) {
+              break;
+            }
+
+            processLine(line);
+          }
+        }
+      );
+
+      // ==========================================
+      // STREAM END
+      // ==========================================
+
+      upstreamResponse.data.on(
         'end',
         () => {
+          if (
+            finished ||
+            res.writableEnded
+          ) {
+            return;
+          }
+
+          // Process any final buffered SSE line.
+          if (buffer.trim()) {
+            processLine(buffer);
+            buffer = '';
+          }
+
+          if (
+            finished ||
+            res.writableEnded
+          ) {
+            return;
+          }
+
+          // Flush remaining normalized content.
+          const finalContent =
+            normalizer.finish();
+
+          if (finalContent) {
+            writeSSE(
+              res,
+              createContentChunk(
+                finalContent
+              )
+            );
+          }
+
+          writeDone(res);
+
+          finished = true;
+
           res.end();
         }
       );
 
-      response.data.on(
+      // ==========================================
+      // STREAM ERROR
+      // ==========================================
+
+      upstreamResponse.data.on(
         'error',
         (err) => {
           console.error(
-            'Stream error:',
-            err
+            '[NIM STREAM ERROR]',
+            err.message
           );
 
-          res.end();
+          if (
+            !res.writableEnded
+          ) {
+            // If the SSE response has already
+            // started, we cannot safely replace it
+            // with an HTTP JSON error.
+            //
+            // Just close the stream.
+            res.end();
+          }
         }
       );
     } catch (error) {
-      const safePayload =
+      console.error(
+        '[PROXY ERROR]',
+        error?.message ||
+          'Unknown error'
+      );
+
+      // ==========================================
+      // IMPORTANT:
+      //
+      // Never JSON.stringify the entire Axios
+      // error or response stream.
+      //
+      // That is what causes:
+      //
+      // TypeError:
+      // Converting circular structure to JSON
+      // ==========================================
+
+      const safe =
         await getSafeErrorPayload(
           error
         );
 
-      console.error(
-        'Proxy error:',
-        safePayload
-      );
+      if (
+        res.headersSent
+      ) {
+        if (
+          !res.writableEnded
+        ) {
+          res.end();
+        }
 
-      // If SSE headers were already flushed to the client before this
-      // failed, we can no longer send a fresh status/JSON body — just
-      // close the connection instead of throwing a second error.
-      if (res.headersSent) {
-        res.end();
         return;
       }
 
-      res.status(
-        error.response?.status ||
-          500
-      );
-
-      res.json({
-        error: {
-          message: safePayload,
-
-          type:
-            'invalid_request_error',
-
-          code:
-            error.response
-              ?.status || 500
-        }
-      });
+      res
+        .status(safe.status)
+        .json(safe.body);
     }
   }
 );
@@ -588,46 +1356,122 @@ app.post(
 // 404
 // ============================================
 
-app.all('*', (req, res) => {
-  res.status(404).json({
-    error: {
-      message:
-        `Endpoint ${req.path} not found`,
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      error: {
+        message:
+          `Endpoint ${req.path} not found`,
 
-      type:
-        'invalid_request_error',
+        type:
+          'invalid_request_error',
 
-      code: 404
+        code: 404
+      }
+    });
+  }
+);
+
+// ============================================
+// GLOBAL ERROR HANDLER
+// ============================================
+
+app.use(
+  async (
+    error,
+    req,
+    res,
+    next
+  ) => {
+    console.error(
+      '[GLOBAL ERROR]',
+      error?.message ||
+        'Unknown error'
+    );
+
+    if (
+      res.headersSent
+    ) {
+      return next(error);
     }
-  });
-});
+
+    const safe =
+      await getSafeErrorPayload(
+        error
+      );
+
+    res
+      .status(safe.status)
+      .json(safe.body);
+  }
+);
 
 // ============================================
 // START
 // ============================================
 
-app.listen(PORT, () => {
-  console.log(
-    `NVIDIA NIM proxy running on port ${PORT}`
-  );
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      '============================================'
+    );
 
-  console.log(
-    `Fallback model: z-ai/glm-5.2`
-  );
+    console.log(
+      'NVIDIA NIM OpenAI-compatible proxy'
+    );
 
-  console.log(
-    `Reasoning display: ${
-      SHOW_REASONING
-        ? 'ENABLED'
-        : 'DISABLED'
-    }`
-  );
+    console.log(
+      '============================================'
+    );
 
-  console.log(
-    `Thinking mode: ${
-      ENABLE_THINKING_MODE
-        ? 'ENABLED'
-        : 'DISABLED'
-    }`
-  );
-});
+    console.log(
+      `Port: ${PORT}`
+    );
+
+    console.log(
+      `NIM API: ${NIM_API_BASE}`
+    );
+
+    console.log(
+      `Fallback model: ${FALLBACK_MODEL}`
+    );
+
+    console.log(
+      `Reasoning display: ${
+        SHOW_REASONING
+          ? 'ENABLED'
+          : 'DISABLED'
+      }`
+    );
+
+    console.log(
+      `Thinking mode: ${
+        ENABLE_THINKING_MODE
+          ? 'ENABLED'
+          : 'DISABLED'
+      }`
+    );
+
+    console.log(
+      'Models:'
+    );
+
+    for (
+      const [
+        alias,
+        nimModel
+      ] of Object.entries(
+        MODEL_MAPPING
+      )
+    ) {
+      console.log(
+        `  ${alias} -> ${nimModel}`
+      );
+    }
+
+    console.log(
+      '============================================'
+    );
+  }
+);

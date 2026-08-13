@@ -77,6 +77,9 @@ const MODEL_MAPPING = {
   'deepseek-v4':
     'deepseek-ai/deepseek-v4-pro',
 
+  'stepfun-3.7':
+    'stepfun-ai/step-3.7-flash',
+
   // Small, fast, purpose-tuned for roleplay/RAG/function-calling per
   // NVIDIA's own model card. Good low-latency option for quick in-character
   // responses rather than long-form narrative.

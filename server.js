@@ -3,7 +3,7 @@
 // STREAMING ONLY
 //
 // Models:
-// - glm-5.1          -> z-ai/glm-5.2
+// - glm-5.2          -> z-ai/glm-5.2
 // - kimi-k2.6        -> moonshotai/kimi-k2.6
 // - deepseek-v4     -> deepseek-ai/deepseek-v4-pro
 // - step-3.7-flash  -> stepfun-ai/step-3.7-flash
@@ -136,7 +136,7 @@ const RETRYABLE_NETWORK_CODES = new Set([
 // ============================================
 
 const MODEL_MAPPING = {
-  'glm-5.1':
+  'glm-5.2':
     'z-ai/glm-5.2',
 
   'kimi-k2.6':
@@ -980,7 +980,7 @@ app.get(
       },
 
       models: {
-        'glm-5.1': {
+        'glm-5.2': {
           reasoning: true
         },
 

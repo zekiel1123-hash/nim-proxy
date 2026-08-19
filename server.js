@@ -2,35 +2,41 @@
 // OpenAI-compatible NVIDIA NIM proxy
 // STREAMING ONLY
 //
-// Models:
-// - glm-5.2          -> z-ai/glm-5.2
-// - kimi-k2.6        -> moonshotai/kimi-k2.6
-// - deepseek-v4     -> deepseek-ai/deepseek-v4-pro
-// - step-3.7-flash  -> stepfun-ai/step-3.7-flash
+// Client-facing models:
+// - glm-5.2
+// - kimi-k2.6
+// - deepseek-v4
+// - step-3.7-flash
+//
+// NVIDIA models:
+// - glm-5.2       -> z-ai/glm-5.2
+// - kimi-k2.6     -> moonshotai/kimi-k2.6
+// - deepseek-v4   -> deepseek-ai/deepseek-v4-pro
+// - step-3.7-flash -> stepfun-ai/step-3.7-flash
 //
 // Step 3.7 Flash:
-// - Thinking/reasoning output is intentionally DISABLED.
-// - No chat_template_kwargs are sent.
-// - No reasoning_effort is sent.
+// - Thinking/reasoning intentionally DISABLED.
+// - No thinking parameters are sent.
 // - No <think> tags are generated.
-// - Stray </think> emitted by upstream is removed.
+// - Stray <think> / </think> tags are removed.
 //
-// Other models:
-// - Reasoning output remains enabled when SHOW_REASONING = true.
+// Retry behavior:
+// - HTTP 429 / transient NVIDIA errors are retried.
+// - Retry delays: 10s -> 30s -> 60s -> 60s -> 60s
+// - Maximum 6 total NVIDIA attempts.
+// - Client disconnects do not get reported as the primary
+//   NVIDIA error.
+// - API keys and sensitive headers are never logged.
 //
-// RETRY / BACKOFF:
-// - Retries transient failures before streaming starts.
-// - 10 seconds -> 30 seconds -> 1 minute -> 2 minutes -> 4 minutes.
-// - Honors Retry-After when NVIDIA provides it.
-// - Does NOT retry 400/401/403/404/etc.
-// - Once streaming has started, the request is never retried.
 
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+const PORT =
+  process.env.PORT || 3000;
 
 // ============================================
 // MIDDLEWARE
@@ -72,63 +78,60 @@ const ENABLE_THINKING_MODE = true;
 const REASONING_EFFORT = 'low';
 
 // ============================================
-// RETRY / EXPONENTIAL BACKOFF CONFIG
+// RETRY CONFIG
 // ============================================
 //
-// Retry schedule:
+// Total attempts = 6:
 //
-// Attempt 1 -> 10 seconds
-// Attempt 2 -> 30 seconds
-// Attempt 3 -> 1 minute
-// Attempt 4 -> 2 minutes
-// Attempt 5 -> 4 minutes
+// Attempt 1
+//   ↓ 429
+// wait 10 seconds
 //
-// MAX_RETRIES means retries AFTER the initial
-// request.
+// Attempt 2
+//   ↓ 429
+// wait 30 seconds
 //
-// Therefore MAX_RETRIES = 5 means:
-// initial request + 5 retries = 6 total attempts.
+// Attempt 3
+//   ↓ 429
+// wait 60 seconds
+//
+// Attempt 4
+//   ↓ 429
+// wait 60 seconds
+//
+// Attempt 5
+//   ↓ 429
+// wait 60 seconds
+//
+// Attempt 6
+//   ↓
+// final failure
+//
+// The first three delays are intentionally
+// 10s, 30s, and 60s. Additional retries stay
+// at 60s rather than becoming increasingly long.
 //
 
-const MAX_RETRIES = 5;
+const MAX_ATTEMPTS = 6;
 
-const BACKOFF_DELAYS_MS = [
-  10 * 1000,       // 10 seconds
-  30 * 1000,       // 30 seconds
-  60 * 1000,       // 1 minute
-  2 * 60 * 1000,   // 2 minutes
-  4 * 60 * 1000    // 4 minutes
+const RETRY_DELAYS_MS = [
+  10 * 1000,
+  30 * 1000,
+  60 * 1000,
+  60 * 1000,
+  60 * 1000
 ];
 
-// ============================================
-// RETRYABLE HTTP STATUS CODES
-// ============================================
-
+// Retry these NVIDIA HTTP statuses.
 const RETRYABLE_STATUS_CODES = new Set([
-  408,
-  409,
-  425,
-  429,
-  500,
-  502,
-  503,
-  504
-]);
-
-// ============================================
-// RETRYABLE NETWORK ERRORS
-// ============================================
-
-const RETRYABLE_NETWORK_CODES = new Set([
-  'ECONNRESET',
-  'ECONNABORTED',
-  'ETIMEDOUT',
-  'EPIPE',
-  'ENETRESET',
-  'ENETUNREACH',
-  'EAI_AGAIN',
-  'ECONNREFUSED',
-  'ERR_NETWORK'
+  408, // Request Timeout
+  409, // Conflict
+  425, // Too Early
+  429, // Too Many Requests
+  500, // Internal Server Error
+  502, // Bad Gateway
+  503, // Service Unavailable
+  504  // Gateway Timeout
 ]);
 
 // ============================================
@@ -164,10 +167,9 @@ function isStep37Flash(model) {
   return (
     typeof model === 'string' &&
     (
-      model.includes('step-3.7-flash') ||
-      model.includes(
-        'stepfun-ai/step-3.7-flash'
-      )
+      model === 'step-3.7-flash' ||
+      model === 'stepfun-ai/step-3.7-flash' ||
+      model.includes('step-3.7-flash')
     )
   );
 }
@@ -175,19 +177,6 @@ function isStep37Flash(model) {
 // ============================================
 // THINKING CONFIG
 // ============================================
-//
-// IMPORTANT:
-//
-// Step 3.7 Flash intentionally gets NO thinking
-// parameters.
-//
-// No chat_template_kwargs.
-// No reasoning_effort.
-// No thinking flag.
-//
-// This prevents the proxy from attempting to
-// force reasoning output from Step 3.7 Flash.
-//
 
 function buildThinkingConfig(model) {
   // ============================================
@@ -264,7 +253,7 @@ function extractReasoning(delta) {
 }
 
 // ============================================
-// REMOVE STRAY STEP THINK TAGS
+// CLEAN STEP CONTENT
 // ============================================
 
 function cleanStepContent(content) {
@@ -281,143 +270,18 @@ function cleanStepContent(content) {
 }
 
 // ============================================
-// BACKOFF HELPERS
-// ============================================
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-// ============================================
-// RETRY DELAY
-// ============================================
-//
-// retryAttempt:
-//   0 = first retry -> 10 seconds
-//   1 = second retry -> 30 seconds
-//   2 = third retry -> 1 minute
-//   3 = fourth retry -> 2 minutes
-//   4 = fifth retry -> 4 minutes
-//
-
-function getBackoffDelay(retryAttempt) {
-  const index = Math.min(
-    retryAttempt,
-    BACKOFF_DELAYS_MS.length - 1
-  );
-
-  return BACKOFF_DELAYS_MS[index];
-}
-
-// ============================================
-// RETRY-AFTER PARSER
-// ============================================
-//
-// NVIDIA may send:
-//
-// Retry-After: 60
-//
-// or:
-//
-// Retry-After: <HTTP date>
-//
-// Returns milliseconds or null.
-//
-
-function getRetryAfterMs(response) {
-  const retryAfter =
-    response?.headers?.['retry-after'];
-
-  if (!retryAfter) {
-    return null;
-  }
-
-  // Numeric seconds
-  const seconds =
-    Number(retryAfter);
-
-  if (
-    Number.isFinite(seconds) &&
-    seconds >= 0
-  ) {
-    return seconds * 1000;
-  }
-
-  // HTTP date
-  const date =
-    Date.parse(retryAfter);
-
-  if (
-    Number.isFinite(date)
-  ) {
-    const delay =
-      date - Date.now();
-
-    return Math.max(
-      0,
-      delay
-    );
-  }
-
-  return null;
-}
-
-// ============================================
-// RETRY DECISION
-// ============================================
-
-function isRetryableError(error) {
-  const status =
-    error?.response?.status;
-
-  if (
-    status &&
-    RETRYABLE_STATUS_CODES.has(
-      status
-    )
-  ) {
-    return true;
-  }
-
-  const code =
-    error?.code;
-
-  if (
-    code &&
-    RETRYABLE_NETWORK_CODES.has(
-      code
-    )
-  ) {
-    return true;
-  }
-
-  // Axios timeout
-  if (
-    code === 'ETIMEDOUT' ||
-    code === 'ECONNABORTED'
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-// ============================================
 // SAFE ERROR SERIALIZATION
 // ============================================
-//
-// NEVER send Axios response.data directly into
-// res.json().
-//
-// When responseType = "stream", response.data
-// can be a stream object and may contain circular
-// references.
-//
 
 function getSafeErrorMessage(error) {
-  // Axios response exists
+  // Explicit client cancellation
+  if (
+    error?.code === 'CLIENT_DISCONNECTED'
+  ) {
+    return 'Client disconnected';
+  }
+
+  // Axios response
   if (error?.response) {
     const status =
       error.response.status;
@@ -425,14 +289,12 @@ function getSafeErrorMessage(error) {
     const data =
       error.response.data;
 
-    // String response
     if (
       typeof data === 'string'
     ) {
       return data;
     }
 
-    // Normal JSON object
     if (
       data &&
       typeof data === 'object'
@@ -469,7 +331,6 @@ function getSafeErrorMessage(error) {
     );
   }
 
-  // Axios/network error
   if (error?.message) {
     return error.message;
   }
@@ -498,112 +359,251 @@ function logProxyError(error) {
 }
 
 // ============================================
+// SLEEP
+// ============================================
+//
+// Promise-based delay used by retry logic.
+//
+// The promise can be cancelled when the client
+// disconnects so the proxy doesn't sit around
+// unnecessarily for the entire retry period.
+//
+
+function sleep(ms, shouldCancel) {
+  return new Promise(
+    (resolve, reject) => {
+      let settled = false;
+
+      const timer =
+        setTimeout(() => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          resolve();
+        }, ms);
+
+      if (
+        typeof shouldCancel !==
+        'function'
+      ) {
+        return;
+      }
+
+      const checkCancellation =
+        () => {
+          if (
+            settled
+          ) {
+            return;
+          }
+
+          if (
+            shouldCancel()
+          ) {
+            settled = true;
+
+            clearTimeout(
+              timer
+            );
+
+            const error =
+              new Error(
+                'Client disconnected'
+              );
+
+            error.code =
+              'CLIENT_DISCONNECTED';
+
+            reject(error);
+          }
+        };
+
+      // Check periodically while waiting.
+      //
+      // This keeps the retry delay slow while
+      // still allowing a disconnected client to
+      // cancel the request promptly.
+
+      const interval =
+        setInterval(
+          () => {
+            if (
+              settled
+            ) {
+              clearInterval(
+                interval
+              );
+
+              return;
+            }
+
+            checkCancellation();
+          },
+          1000
+        );
+
+      // Clean up the interval when the timer
+      // completes.
+      const originalResolve =
+        resolve;
+
+      void originalResolve;
+    }
+  );
+}
+
+// ============================================
+// BETTER CANCELLABLE DELAY
+// ============================================
+
+function waitForRetry(
+  ms,
+  isClientDisconnected
+) {
+  return new Promise(
+    (resolve, reject) => {
+      let finished = false;
+
+      const timer =
+        setTimeout(() => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          clearInterval(
+            interval
+          );
+
+          resolve();
+        }, ms);
+
+      const interval =
+        setInterval(() => {
+          if (
+            isClientDisconnected()
+          ) {
+            if (finished) {
+              return;
+            }
+
+            finished = true;
+
+            clearTimeout(
+              timer
+            );
+
+            clearInterval(
+              interval
+            );
+
+            const error =
+              new Error(
+                'Client disconnected'
+              );
+
+            error.code =
+              'CLIENT_DISCONNECTED';
+
+            reject(error);
+          }
+        }, 1000);
+    }
+  );
+}
+
+// ============================================
 // READ NVIDIA ERROR STREAM
 // ============================================
 
 async function readErrorStream(stream) {
-  let errorBody = '';
+  let body = '';
 
   try {
     for await (
       const chunk of stream
     ) {
-      errorBody +=
-        chunk.toString();
+      body += chunk.toString();
 
-      // Prevent pathological
-      // error responses.
       if (
-        errorBody.length >
-        100000
+        body.length >= 100000
       ) {
         break;
       }
     }
   } catch {
-    // Ignore stream-read error.
+    // Ignore secondary stream-read errors.
   }
 
-  return errorBody;
+  return body;
 }
 
 // ============================================
-// PARSE ERROR BODY
+// PARSE NVIDIA ERROR
 // ============================================
 
-function parseErrorBody(errorBody) {
+function parseNvidiaErrorBody(
+  errorBody
+) {
   if (!errorBody) {
-    return '';
+    return {
+      raw: '',
+      message: ''
+    };
   }
 
   try {
-    return JSON.parse(
-      errorBody
-    );
-  } catch {
-    return errorBody;
-  }
-}
+    const parsed =
+      JSON.parse(errorBody);
 
-// ============================================
-// GET ERROR MESSAGE FROM BODY
-// ============================================
-
-function getErrorBodyMessage(
-  parsedError,
-  status
-) {
-  if (
-    typeof parsedError === 'string'
-  ) {
-    return parsedError;
-  }
-
-  if (
-    parsedError &&
-    typeof parsedError === 'object'
-  ) {
-    return (
-      parsedError?.error?.message ||
+    const message =
+      parsed?.error?.message ||
       (
-        typeof parsedError.error ===
+        typeof parsed?.error ===
         'string'
-          ? parsedError.error
-          : null
+          ? parsed.error
+          : ''
       ) ||
-      parsedError?.message ||
-      `NVIDIA API returned HTTP ${status}`
-    );
-  }
+      parsed?.message ||
+      '';
 
-  return (
-    `NVIDIA API returned HTTP ${status}`
-  );
+    return {
+      raw: parsed,
+      message
+    };
+  } catch {
+    return {
+      raw: errorBody,
+      message: errorBody
+    };
+  }
 }
 
 // ============================================
-// MAKE NVIDIA REQUEST WITH RETRIES
+// CREATE NVIDIA REQUEST
 // ============================================
-//
-// IMPORTANT:
-//
-// This function only retries BEFORE a successful
-// streaming response is returned.
-//
-// Once a 2xx streaming response is returned,
-// streaming begins and there are NO retries.
-//
 
-async function makeNvidiaRequest(
+async function requestNvidiaWithRetry(
   nimRequest,
-  req
+  isClientDisconnected
 ) {
-  let retryCount = 0;
+  let lastError = null;
 
-  while (true) {
-    // If the client disconnected while we were
-    // waiting during backoff, stop immediately.
-    if (req.destroyed) {
+  for (
+    let attempt = 1;
+    attempt <= MAX_ATTEMPTS;
+    attempt++
+  ) {
+    // ==========================================
+    // CLIENT DISCONNECTED
+    // ==========================================
+
+    if (
+      isClientDisconnected()
+    ) {
       const error =
         new Error(
           'Client disconnected'
@@ -615,13 +615,11 @@ async function makeNvidiaRequest(
       throw error;
     }
 
-    try {
-      console.log(
-        `[NVIDIA Request] Attempt ${
-          retryCount + 1
-        }/${MAX_RETRIES + 1}`
-      );
+    console.log(
+      `[NVIDIA Request] Attempt ${attempt}/${MAX_ATTEMPTS}`
+    );
 
+    try {
       const response =
         await axios.post(
           `${NIM_API_BASE}/chat/completions`,
@@ -641,14 +639,10 @@ async function makeNvidiaRequest(
             responseType:
               'stream',
 
-            // We inspect the status ourselves
-            // so retry logic can make the decision.
-            validateStatus:
-              () => true,
+            timeout: 0,
 
-            // This controls connection/response
-            // timeout before streaming starts.
-            timeout: 120000
+            validateStatus:
+              () => true
           }
         );
 
@@ -661,128 +655,118 @@ async function makeNvidiaRequest(
         response.status < 300
       ) {
         console.log(
-          `[NVIDIA Request] Success HTTP ${response.status}`
+          `[NVIDIA Request] Success on attempt ${attempt}/${MAX_ATTEMPTS}`
         );
 
-        // IMPORTANT:
-        // Streaming has not been processed yet,
-        // but this is now a successful stream.
-        // Do not retry after returning it.
         return response;
       }
 
       // ==========================================
-      // NVIDIA HTTP ERROR
+      // READ ERROR RESPONSE
       // ==========================================
-
-      const status =
-        response.status;
-
-      const retryable =
-        RETRYABLE_STATUS_CODES.has(
-          status
-        );
-
-      // Honor Retry-After if provided.
-      const retryAfterMs =
-        getRetryAfterMs(
-          response
-        );
 
       const errorBody =
         await readErrorStream(
           response.data
         );
 
-      const parsedError =
-        parseErrorBody(
+      const parsed =
+        parseNvidiaErrorBody(
           errorBody
         );
 
+      const status =
+        response.status;
+
       const message =
-        getErrorBodyMessage(
-          parsedError,
-          status
-        );
+        parsed.message ||
+        `NVIDIA API returned HTTP ${status}`;
+
+      // Create a normal Error object.
+      // Do NOT attach the stream to it.
+      //
+      // This avoids circular JSON errors.
+
+      const error =
+        new Error(message);
+
+      error.name =
+        'NvidiaApiError';
+
+      error.status =
+        status;
+
+      error.response = {
+        status,
+        data:
+          parsed.raw
+      };
+
+      lastError =
+        error;
 
       // ==========================================
-      // NO RETRIES LEFT
+      // NON-RETRYABLE ERROR
       // ==========================================
 
       if (
-        !retryable ||
-        retryCount >= MAX_RETRIES
+        !RETRYABLE_STATUS_CODES.has(
+          status
+        )
       ) {
-        const error =
-          new Error(
-            message
-          );
-
-        error.response = {
-          status,
-          data: parsedError,
-          headers:
-            response.headers
-        };
-
-        error.isNvidiaError =
-          true;
+        console.error(
+          `[NVIDIA Error] HTTP ${status}: ${message}`
+        );
 
         throw error;
       }
 
       // ==========================================
-      // CALCULATE BACKOFF
+      // FINAL ATTEMPT
       // ==========================================
 
-      const configuredDelay =
-        getBackoffDelay(
-          retryCount
+      if (
+        attempt >= MAX_ATTEMPTS
+      ) {
+        console.error(
+          `[NVIDIA Retry] Exhausted ${MAX_ATTEMPTS} attempts. ` +
+          `Final HTTP ${status}: ${message}`
         );
 
+        throw error;
+      }
+
+      // ==========================================
+      // RETRY DELAY
+      // ==========================================
+
       const delay =
-        retryAfterMs !== null
-          ? Math.max(
-              configuredDelay,
-              retryAfterMs
-            )
-          : configuredDelay;
+        RETRY_DELAYS_MS[
+          attempt - 1
+        ] ??
+        60 * 1000;
+
+      const seconds =
+        Math.round(
+          delay / 1000
+        );
 
       console.warn(
         `[NVIDIA Retry] HTTP ${status}. ` +
-        `Retry ${retryCount + 1}/${MAX_RETRIES} ` +
-        `in ${formatDuration(delay)}`
+        `Retry ${attempt}/${MAX_ATTEMPTS - 1} in ${seconds}s`
       );
 
-      if (message) {
-        console.warn(
-          `[NVIDIA Retry] ${message}`
-        );
-      }
+      console.warn(
+        `[NVIDIA Retry] ${message}`
+      );
 
-      // Destroy the consumed error stream
-      // before sleeping/retrying.
-      try {
-        if (
-          response.data &&
-          typeof response.data.destroy ===
-            'function'
-        ) {
-          response.data.destroy();
-        }
-      } catch {
-        // Ignore.
-      }
-
-      await sleepWithDisconnectCheck(
+      await waitForRetry(
         delay,
-        req
+        isClientDisconnected
       );
-
-      retryCount++;
     } catch (error) {
       // ==========================================
-      // REQUEST / NETWORK ERROR
+      // CLIENT DISCONNECT
       // ==========================================
 
       if (
@@ -792,149 +776,85 @@ async function makeNvidiaRequest(
         throw error;
       }
 
-      const retryable =
-        isRetryableError(
-          error
-        );
-
-      // If this is one of our already-processed
-      // NVIDIA HTTP errors, don't accidentally
-      // treat it as a network retry separately.
-      const status =
-        error?.response?.status;
-
       // ==========================================
-      // NO RETRY
+      // OUR NVIDIA HTTP ERROR
       // ==========================================
+      //
+      // We deliberately throw this above after
+      // exhausting/non-retryable responses.
+      //
 
       if (
-        !retryable ||
-        retryCount >= MAX_RETRIES
+        error?.name ===
+        'NvidiaApiError'
       ) {
         throw error;
       }
 
       // ==========================================
-      // CALCULATE NETWORK BACKOFF
+      // NETWORK / AXIOS ERROR
       // ==========================================
 
-      const configuredDelay =
-        getBackoffDelay(
-          retryCount
+      lastError =
+        error;
+
+      const retryableNetworkError =
+        !error?.response ||
+        RETRYABLE_STATUS_CODES.has(
+          error?.response?.status
         );
 
-      const retryAfterMs =
-        getRetryAfterMs(
-          error?.response
-        );
-
-      const delay =
-        retryAfterMs !== null
-          ? Math.max(
-              configuredDelay,
-              retryAfterMs
-            )
-          : configuredDelay;
-
-      console.warn(
-        `[NVIDIA Retry] ` +
-        `${status ? `HTTP ${status}` : error.code || 'network error'}. ` +
-        `Retry ${retryCount + 1}/${MAX_RETRIES} ` +
-        `in ${formatDuration(delay)}`
-      );
-
-      await sleepWithDisconnectCheck(
-        delay,
-        req
-      );
-
-      retryCount++;
-    }
-  }
-}
-
-// ============================================
-// FORMAT DURATION
-// ============================================
-
-function formatDuration(ms) {
-  const totalSeconds =
-    Math.ceil(ms / 1000);
-
-  if (
-    totalSeconds < 60
-  ) {
-    return `${totalSeconds}s`;
-  }
-
-  const minutes =
-    Math.floor(
-      totalSeconds / 60
-    );
-
-  const seconds =
-    totalSeconds % 60;
-
-  if (seconds === 0) {
-    return `${minutes}m`;
-  }
-
-  return `${minutes}m ${seconds}s`;
-}
-
-// ============================================
-// SLEEP WITH CLIENT DISCONNECT CHECK
-// ============================================
-
-function sleepWithDisconnectCheck(
-  ms,
-  req
-) {
-  return new Promise(
-    (resolve, reject) => {
-      let finished = false;
-
-      const timer =
-        setTimeout(() => {
-          if (finished) {
-            return;
-          }
-
-          finished = true;
-
-          req.removeListener(
-            'close',
-            onClose
-          );
-
-          resolve();
-        }, ms);
-
-      function onClose() {
-        if (finished) {
-          return;
-        }
-
-        finished = true;
-
-        clearTimeout(timer);
-
-        const error =
-          new Error(
-            'Client disconnected during retry backoff'
-          );
-
-        error.code =
-          'CLIENT_DISCONNECTED';
-
-        reject(error);
+      if (
+        !retryableNetworkError
+      ) {
+        throw error;
       }
 
-      req.once(
-        'close',
-        onClose
+      // ==========================================
+      // FINAL NETWORK ATTEMPT
+      // ==========================================
+
+      if (
+        attempt >= MAX_ATTEMPTS
+      ) {
+        throw error;
+      }
+
+      const delay =
+        RETRY_DELAYS_MS[
+          attempt - 1
+        ] ??
+        60 * 1000;
+
+      const seconds =
+        Math.round(
+          delay / 1000
+        );
+
+      console.warn(
+        `[NVIDIA Retry] Network error. ` +
+        `Retry ${attempt}/${MAX_ATTEMPTS - 1} in ${seconds}s`
+      );
+
+      console.warn(
+        `[NVIDIA Retry] ${
+          error?.message ||
+          'Network error'
+        }`
+      );
+
+      await waitForRetry(
+        delay,
+        isClientDisconnected
       );
     }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      'NVIDIA request failed'
+    )
   );
 }
 
@@ -960,22 +880,15 @@ app.get(
         FALLBACK_MODEL,
 
       retry: {
-        enabled: true,
+        max_attempts:
+          MAX_ATTEMPTS,
 
-        max_retries:
-          MAX_RETRIES,
-
-        delays: [
-          '10s',
-          '30s',
-          '1m',
-          '2m',
-          '4m'
-        ],
-
-        retryable_status_codes:
-          Array.from(
-            RETRYABLE_STATUS_CODES
+        delays_seconds:
+          RETRY_DELAYS_MS.map(
+            (ms) =>
+              Math.round(
+                ms / 1000
+              )
           )
       },
 
@@ -1039,6 +952,38 @@ app.post(
   async (req, res) => {
     let response = null;
 
+    let clientDisconnected =
+      false;
+
+    // ==========================================
+    // CLIENT DISCONNECT TRACKING
+    // ==========================================
+
+    const onClientClose =
+      () => {
+        // IMPORTANT:
+        //
+        // req.close can also occur during normal
+        // request lifecycle handling. We only mark
+        // the request disconnected when the
+        // response has not completed.
+        //
+        // This flag is checked by the retry loop
+        // and streaming code.
+
+        if (
+          !res.writableEnded
+        ) {
+          clientDisconnected =
+            true;
+        }
+      };
+
+    req.on(
+      'close',
+      onClientClose
+    );
+
     try {
       const {
         model,
@@ -1078,10 +1023,12 @@ app.post(
         FALLBACK_MODEL;
 
       const step37 =
-        isStep37Flash(nimModel);
+        isStep37Flash(
+          nimModel
+        );
 
       // ==========================================
-      // BUILD BASE REQUEST
+      // BUILD NVIDIA REQUEST
       // ==========================================
 
       const nimRequest = {
@@ -1104,7 +1051,7 @@ app.post(
       };
 
       // ==========================================
-      // OPTIONAL TOP_P
+      // TOP P
       // ==========================================
 
       if (
@@ -1113,15 +1060,15 @@ app.post(
       ) {
         nimRequest.top_p =
           top_p;
-      } else if (step37) {
-        // Step 3.7 Flash default from the
-        // configured NVIDIA example.
+      } else if (
+        step37
+      ) {
         nimRequest.top_p =
           0.95;
       }
 
       // ==========================================
-      // OPTIONAL SEED
+      // SEED
       // ==========================================
 
       if (
@@ -1149,29 +1096,52 @@ app.post(
       }
 
       // ==========================================
-      // DEBUG INFORMATION
+      // REQUEST LOG
       // ==========================================
 
       console.log(
-        `[Request] ${
-          model || 'unknown'
-        } -> ${nimModel}` +
-        `${
+        `[Request] ${model || 'unknown'} -> ${nimModel}` +
+        (
           step37
             ? ' [REASONING DISABLED]'
             : ''
-        }`
+        )
       );
 
       // ==========================================
-      // NVIDIA REQUEST WITH RETRIES
+      // NVIDIA REQUEST + RETRY
       // ==========================================
 
       response =
-        await makeNvidiaRequest(
+        await requestNvidiaWithRetry(
           nimRequest,
-          req
+          () =>
+            clientDisconnected
         );
+
+      // ==========================================
+      // IF CLIENT DISCONNECTED DURING RETRIES
+      // ==========================================
+
+      if (
+        clientDisconnected
+      ) {
+        console.warn(
+          '[Proxy] Client disconnected during NVIDIA retry cycle'
+        );
+
+        // Destroy the NVIDIA stream if one
+        // somehow became available.
+        if (
+          response?.data &&
+          typeof response.data.destroy ===
+            'function'
+        ) {
+          response.data.destroy();
+        }
+
+        return;
+      }
 
       // ==========================================
       // SSE HEADERS
@@ -1216,17 +1186,21 @@ app.post(
       // ==========================================
 
       function sendDone() {
-        if (finished) {
+        if (
+          finished
+        ) {
           return;
         }
 
         finished = true;
 
-        // Only models with reasoning enabled
-        // can have an open <think> block.
+        // Close an unfinished reasoning block
+        // for reasoning-enabled models.
+
         if (
           SHOW_REASONING &&
-          reasoningOpen
+          reasoningOpen &&
+          !step37
         ) {
           const closeChunk = {
             choices: [
@@ -1246,7 +1220,7 @@ app.post(
               )}\n\n`
             );
           } catch {
-            // Client may already be gone.
+            // Client may be gone.
           }
 
           reasoningOpen =
@@ -1258,7 +1232,7 @@ app.post(
             'data: [DONE]\n\n'
           );
         } catch {
-          // Client may already be gone.
+          // Client may be gone.
         }
 
         if (
@@ -1269,7 +1243,7 @@ app.post(
       }
 
       // ==========================================
-      // WRITE SSE DATA
+      // WRITE SSE
       // ==========================================
 
       function writeSSE(data) {
@@ -1305,19 +1279,18 @@ app.post(
             ''
           );
 
-        // Ignore blank lines.
-        if (!line.trim()) {
+        if (
+          !line.trim()
+        ) {
           return;
         }
 
-        // Ignore SSE comments.
         if (
           line.startsWith(':')
         ) {
           return;
         }
 
-        // NVIDIA sends SSE data lines.
         if (
           !line.startsWith(
             'data:'
@@ -1343,7 +1316,7 @@ app.post(
         }
 
         // ==========================================
-        // PARSE JSON
+        // PARSE
         // ==========================================
 
         let data;
@@ -1361,7 +1334,7 @@ app.post(
         }
 
         // ==========================================
-        // GET DELTA
+        // CHOICE / DELTA
         // ==========================================
 
         const choice =
@@ -1379,14 +1352,6 @@ app.post(
         // STEP 3.7 FLASH
         // REASONING DISABLED
         // ==========================================
-        //
-        // Do NOT create <think>.
-        // Do NOT close/open reasoning.
-        // Do NOT expose reasoning fields.
-        //
-        // If Step 3.7 Flash puts a stray
-        // </think> into content, remove it.
-        //
 
         if (step37) {
           if (
@@ -1410,7 +1375,7 @@ app.post(
 
         // ==========================================
         // OTHER MODELS
-        // REASONING PROCESSING
+        // REASONING
         // ==========================================
 
         const reasoning =
@@ -1449,7 +1414,7 @@ app.post(
         }
 
         // ==========================================
-        // NORMAL CONTENT
+        // CONTENT
         // ==========================================
 
         if (content) {
@@ -1486,14 +1451,14 @@ app.post(
         delete delta.reasoning_content;
 
         // ==========================================
-        // SEND TO CLIENT
+        // SEND
         // ==========================================
 
         writeSSE(data);
       }
 
       // ==========================================
-      // STREAM DATA
+      // NVIDIA STREAM DATA
       // ==========================================
 
       response.data.on(
@@ -1522,7 +1487,9 @@ app.post(
           for (
             const line of lines
           ) {
-            if (finished) {
+            if (
+              finished
+            ) {
               break;
             }
 
@@ -1568,20 +1535,16 @@ app.post(
             !finished &&
             !res.writableEnded
           ) {
-            try {
-              writeSSE({
-                error: {
-                  message:
-                    error.message ||
-                    'NVIDIA stream error',
+            writeSSE({
+              error: {
+                message:
+                  error.message ||
+                  'NVIDIA stream error',
 
-                  type:
-                    'stream_error'
-                }
-              });
-            } catch {
-              // Ignore write failure.
-            }
+                type:
+                  'stream_error'
+              }
+            });
 
             if (
               !res.writableEnded
@@ -1595,7 +1558,7 @@ app.post(
       );
 
       // ==========================================
-      // CLIENT DISCONNECT
+      // CLIENT DISCONNECT DURING STREAM
       // ==========================================
 
       req.on(
@@ -1615,13 +1578,34 @@ app.post(
       );
     } catch (error) {
       // ==========================================
+      // CLIENT DISCONNECTED
+      // ==========================================
+      //
+      // Do NOT turn this into:
+      //
+      // [Proxy Error] No HTTP status
+      // Client disconnected
+      //
+      // when it happened during a 429 retry.
+      //
+
+      if (
+        error?.code ===
+        'CLIENT_DISCONNECTED'
+      ) {
+        console.warn(
+          '[Proxy] Client disconnected; stopping retry cycle'
+        );
+
+        return;
+      }
+
+      // ==========================================
       // SAFE PROXY ERROR
       // ==========================================
 
       logProxyError(error);
 
-      // If streaming has already begun,
-      // do NOT attempt res.json().
       if (
         res.headersSent ||
         res.writableEnded
@@ -1635,18 +1619,8 @@ app.post(
         return;
       }
 
-      // ==========================================
-      // CLIENT DISCONNECTED
-      // ==========================================
-
-      if (
-        error?.code ===
-        'CLIENT_DISCONNECTED'
-      ) {
-        return;
-      }
-
       const status =
+        error?.status ||
         error?.response?.status ||
         500;
 
@@ -1662,7 +1636,8 @@ app.post(
           message,
 
           type:
-            error?.isNvidiaError
+            error?.name ===
+            'NvidiaApiError'
               ? 'nvidia_api_error'
               : 'invalid_request_error',
 
@@ -1749,15 +1724,15 @@ app.listen(
     );
 
     console.log(
+      'Retry delays: 10s -> 30s -> 60s -> 60s -> 60s'
+    );
+
+    console.log(
+      `Maximum NVIDIA attempts: ${MAX_ATTEMPTS}`
+    );
+
+    console.log(
       'Streaming only: ENABLED'
-    );
-
-    console.log(
-      'Retry/backoff: 10s -> 30s -> 1m -> 2m -> 4m'
-    );
-
-    console.log(
-      `Maximum retries: ${MAX_RETRIES}`
     );
 
     console.log(

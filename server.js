@@ -3,34 +3,41 @@
 // STREAMING ONLY
 //
 // Client models:
-// - glm-5.2
-// - kimi-k2.6
-// - deepseek-v4
-// - step-3.7-flash
+// - glm-5.2          -> z-ai/glm-5.2
+// - kimi-k2.6        -> moonshotai/kimi-k2.6
+// - deepseek-v4      -> deepseek-ai/deepseek-v4-pro
+// - step-3.7-flash   -> stepfun-ai/step-3.7-flash
 //
-// NVIDIA NIM models:
-// - glm-5.2       -> z-ai/glm-5.2
-// - kimi-k2.6     -> moonshotai/kimi-k2.6
-// - deepseek-v4   -> deepseek-ai/deepseek-v4-pro
-// - step-3.7-flash -> stepfun-ai/step-3.7-flash
-//
-// Retry behavior:
-// - Attempt 1
-// - 429/5xx/network error -> wait 10s
-// - Retry -> wait 30s
-// - Retry -> wait 60s
-// - Further retries -> wait 60s
+// Features:
+// - Streaming only
+// - Exponential/slower retry backoff
+// - Retry delays: 10s -> 30s -> 60s -> 60s -> 60s
+// - HTTP 429 retry
+// - HTTP 5xx retry
+// - Safe Axios error handling
+// - No API key logging
+// - Step 3.7 reasoning disabled
+// - Other model reasoning supported
+// - Robust NVIDIA SSE parsing
+// - OpenAI-compatible SSE output
+// - Guarantees final [DONE]
+// - Flushes SSE headers immediately
 //
 // IMPORTANT:
-// - HTTP 200 immediately stops retrying.
-// - Once HTTP 200 is received, the NVIDIA SSE stream
-//   is forwarded directly to the client.
-// - Step 3.7 Flash reasoning is intentionally disabled.
-// - Step 3.7 Flash stray </think> tags are removed.
+// Step 3.7 Flash intentionally receives NO thinking parameters.
+// We also remove stray </think> tags from its output.
+
+// ============================================
+// IMPORTS
+// ============================================
 
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+
+// ============================================
+// APP
+// ============================================
 
 const app = express();
 
@@ -67,6 +74,10 @@ const NIM_API_BASE =
 const NIM_API_KEY =
   process.env.NIM_API_KEY;
 
+// ============================================
+// DISPLAY / THINKING CONFIG
+// ============================================
+
 // Display reasoning in <think> blocks
 const SHOW_REASONING = true;
 
@@ -77,39 +88,39 @@ const ENABLE_THINKING_MODE = true;
 const REASONING_EFFORT = 'low';
 
 // ============================================
-// RETRY CONFIGURATION
+// RETRY CONFIG
 // ============================================
 //
-// 6 total attempts:
+// Deliberately slow:
 //
 // Attempt 1
-//   ↓ 429
-// wait 10 seconds
-//   ↓
-// Attempt 2
-//   ↓ 429
-// wait 30 seconds
-//   ↓
-// Attempt 3
-//   ↓ 429
-// wait 60 seconds
-//   ↓
-// Attempt 4
-//   ↓
-// wait 60 seconds
-//   ↓
-// Attempt 5
-//   ↓
-// wait 60 seconds
-//   ↓
-// Attempt 6
+//   immediate
 //
-// HTTP 200 NEVER retries.
+// Attempt 2
+//   wait 10 seconds
+//
+// Attempt 3
+//   wait 30 seconds
+//
+// Attempt 4
+//   wait 60 seconds
+//
+// Attempt 5
+//   wait 60 seconds
+//
+// Attempt 6
+//   wait 60 seconds
+//
+// Total possible retry waiting:
+// 10 + 30 + 60 + 60 + 60 = 220 seconds
+//
+// This is especially useful for NVIDIA 429
+// rate-limit responses.
 //
 
 const MAX_ATTEMPTS = 6;
 
-const RETRY_DELAYS = [
+const RETRY_DELAYS_MS = [
   10_000,
   30_000,
   60_000,
@@ -117,18 +128,13 @@ const RETRY_DELAYS = [
   60_000
 ];
 
-// Retry these HTTP statuses.
-const RETRYABLE_STATUS_CODES = new Set([
-  429,
-  500,
-  502,
-  503,
-  504
-]);
-
 // ============================================
 // MODEL MAPPING
 // ============================================
+//
+// Client-visible model names are on the left.
+// NVIDIA NIM model names are on the right.
+//
 
 const MODEL_MAPPING = {
   'glm-5.2':
@@ -145,7 +151,7 @@ const MODEL_MAPPING = {
 };
 
 // ============================================
-// DEFAULT FALLBACK
+// FALLBACK
 // ============================================
 
 const FALLBACK_MODEL =
@@ -163,9 +169,12 @@ function isStep37Flash(model) {
   }
 
   return (
-    model === 'step-3.7-flash' ||
-    model === 'stepfun-ai/step-3.7-flash' ||
-    model.includes('step-3.7-flash')
+    model.includes(
+      'step-3.7-flash'
+    ) ||
+    model.includes(
+      'stepfun-ai/step-3.7-flash'
+    )
   );
 }
 
@@ -176,8 +185,18 @@ function isStep37Flash(model) {
 function buildThinkingConfig(model) {
   // ============================================
   // STEP 3.7 FLASH
-  // REASONING DISABLED
   // ============================================
+  //
+  // INTENTIONALLY NOTHING.
+  //
+  // No:
+  //   chat_template_kwargs
+  //
+  // No:
+  //   reasoning_effort
+  //
+  // No thinking flag.
+  //
 
   if (
     isStep37Flash(model)
@@ -250,13 +269,16 @@ function extractReasoning(delta) {
 }
 
 // ============================================
-// STEP 3.7 CONTENT CLEANING
+// CLEAN STEP CONTENT
 // ============================================
 //
-// Step 3.7 reasoning is disabled.
+// Step 3.7 can occasionally emit:
 //
-// If upstream nevertheless inserts a stray
-// <think> or </think> into content, remove it.
+// </think>
+//
+// even though reasoning is disabled.
+//
+// Remove both opening and closing tags.
 //
 
 function cleanStepContent(content) {
@@ -282,11 +304,9 @@ function cleanStepContent(content) {
 // ============================================
 
 function getSafeErrorMessage(error) {
-  // ============================================
-  // AXIOS RESPONSE
-  // ============================================
-
-  if (error?.response) {
+  if (
+    error?.response
+  ) {
     const status =
       error.response.status;
 
@@ -338,10 +358,6 @@ function getSafeErrorMessage(error) {
     );
   }
 
-  // ============================================
-  // NETWORK / AXIOS ERROR
-  // ============================================
-
   if (
     error?.message
   ) {
@@ -374,17 +390,326 @@ function logProxyError(error) {
 }
 
 // ============================================
+// RETRYABLE STATUS
+// ============================================
+
+function isRetryableStatus(
+  status
+) {
+  return (
+    status === 408 ||
+    status === 409 ||
+    status === 425 ||
+    status === 429 ||
+    status >= 500
+  );
+}
+
+// ============================================
 // SLEEP
 // ============================================
 
 function sleep(ms) {
   return new Promise(
-    (resolve) => {
+    (resolve) =>
       setTimeout(
         resolve,
         ms
+      )
+  );
+}
+
+// ============================================
+// READ ERROR STREAM
+// ============================================
+
+async function readErrorStream(
+  stream
+) {
+  let body = '';
+
+  if (
+    !stream
+  ) {
+    return body;
+  }
+
+  try {
+    for await (
+      const chunk of stream
+    ) {
+      body += chunk.toString(
+        'utf8'
+      );
+
+      if (
+        body.length >= 100000
+      ) {
+        break;
+      }
+    }
+  } catch {
+    // Ignore read failure.
+  }
+
+  return body;
+}
+
+// ============================================
+// NVIDIA REQUEST WITH RETRIES
+// ============================================
+//
+// IMPORTANT:
+//
+// We only retry before a successful
+// streaming response has begun.
+//
+// Once NVIDIA returns HTTP 200,
+// the stream is handed to the client.
+//
+// We NEVER retry halfway through a
+// successful stream.
+//
+
+async function requestNvidia(
+  nimRequest,
+  req
+) {
+  let lastError = null;
+
+  for (
+    let attempt = 1;
+    attempt <= MAX_ATTEMPTS;
+    attempt++
+  ) {
+    console.log(
+      `[NVIDIA Request] Attempt ${attempt}/${MAX_ATTEMPTS}`
+    );
+
+    try {
+      const response =
+        await axios.post(
+          `${NIM_API_BASE}/chat/completions`,
+          nimRequest,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${NIM_API_KEY}`,
+
+              'Content-Type':
+                'application/json',
+
+              Accept:
+                'text/event-stream'
+            },
+
+            responseType:
+              'stream',
+
+            timeout: 0,
+
+            validateStatus:
+              () => true
+          }
+        );
+
+      // ============================================
+      // SUCCESS
+      // ============================================
+
+      if (
+        response.status >= 200 &&
+        response.status < 300
+      ) {
+        console.log(
+          `[NVIDIA Request] HTTP ${response.status}`
+        );
+
+        return response;
+      }
+
+      // ============================================
+      // HTTP ERROR
+      // ============================================
+
+      const errorBody =
+        await readErrorStream(
+          response.data
+        );
+
+      let parsed =
+        errorBody;
+
+      try {
+        parsed =
+          JSON.parse(
+            errorBody
+          );
+      } catch {
+        // Keep string.
+      }
+
+      const message =
+        typeof parsed ===
+        'string'
+          ? parsed
+          : (
+              parsed?.error?.message ||
+              parsed?.message ||
+              `NVIDIA API returned HTTP ${response.status}`
+            );
+
+      console.error(
+        `[NVIDIA Error] HTTP ${response.status}: ${message}`
+      );
+
+      // ============================================
+      // NOT RETRYABLE
+      // ============================================
+
+      if (
+        !isRetryableStatus(
+          response.status
+        )
+      ) {
+        const error =
+          new Error(
+            message
+          );
+
+        error.response = {
+          status:
+            response.status,
+
+          data:
+            parsed
+        };
+
+        throw error;
+      }
+
+      // ============================================
+      // LAST ATTEMPT
+      // ============================================
+
+      if (
+        attempt >= MAX_ATTEMPTS
+      ) {
+        const error =
+          new Error(
+            message
+          );
+
+        error.response = {
+          status:
+            response.status,
+
+          data:
+            parsed
+        };
+
+        throw error;
+      }
+
+      // ============================================
+      // RETRY DELAY
+      // ============================================
+
+      const delay =
+        RETRY_DELAYS_MS[
+          attempt - 1
+        ] ??
+        60_000;
+
+      console.log(
+        `[NVIDIA Retry] HTTP ${response.status}. ` +
+        `Retry ${attempt}/${MAX_ATTEMPTS - 1} ` +
+        `in ${Math.round(delay / 1000)}s`
+      );
+
+      await sleep(
+        delay
+      );
+
+      // If the HTTP request is still
+      // associated with an active request,
+      // continue.
+      //
+      // We intentionally do NOT abort simply
+      // because req.close fired here. Some
+      // clients/proxies can emit close while
+      // maintaining the logical request.
+      //
+
+      lastError =
+        new Error(
+          message
+        );
+
+      lastError.response = {
+        status:
+          response.status,
+
+        data:
+          parsed
+      };
+    } catch (error) {
+      // ============================================
+      // AXIOS / NETWORK ERROR
+      // ============================================
+
+      lastError =
+        error;
+
+      const status =
+        error?.response?.status;
+
+      // ============================================
+      // NON-RETRYABLE
+      // ============================================
+
+      if (
+        !status ||
+        !isRetryableStatus(
+          status
+        )
+      ) {
+        throw error;
+      }
+
+      // ============================================
+      // LAST ATTEMPT
+      // ============================================
+
+      if (
+        attempt >= MAX_ATTEMPTS
+      ) {
+        throw error;
+      }
+
+      const delay =
+        RETRY_DELAYS_MS[
+          attempt - 1
+        ] ??
+        60_000;
+
+      console.log(
+        `[NVIDIA Retry] ${status} ` +
+        `Retry ${attempt}/${MAX_ATTEMPTS - 1} ` +
+        `in ${Math.round(delay / 1000)}s`
+      );
+
+      await sleep(
+        delay
       );
     }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      'NVIDIA request failed'
+    )
   );
 }
 
@@ -398,7 +723,8 @@ app.get(
     res.json({
       status: 'ok',
 
-      streaming_only: true,
+      streaming_only:
+        true,
 
       reasoning_display:
         SHOW_REASONING,
@@ -410,45 +736,35 @@ app.get(
         FALLBACK_MODEL,
 
       retry: {
-        enabled: true,
         max_attempts:
           MAX_ATTEMPTS,
 
         delays_seconds:
-          RETRY_DELAYS.map(
+          RETRY_DELAYS_MS.map(
             (ms) =>
               ms / 1000
-          ),
-
-        retryable_statuses:
-          Array.from(
-            RETRYABLE_STATUS_CODES
           )
       },
 
       models: {
         'glm-5.2': {
-          reasoning: true,
-          nim_model:
-            'z-ai/glm-5.2'
+          reasoning:
+            true
         },
 
         'kimi-k2.6': {
-          reasoning: true,
-          nim_model:
-            'moonshotai/kimi-k2.6'
+          reasoning:
+            true
         },
 
         'deepseek-v4': {
-          reasoning: true,
-          nim_model:
-            'deepseek-ai/deepseek-v4-pro'
+          reasoning:
+            true
         },
 
         'step-3.7-flash': {
-          reasoning: false,
-          nim_model:
-            'stepfun-ai/step-3.7-flash'
+          reasoning:
+            false
         }
       }
     });
@@ -465,23 +781,27 @@ app.get(
     res.json({
       object: 'list',
 
-      data: Object.keys(
-        MODEL_MAPPING
-      ).map(
-        (model) => ({
-          id: model,
+      data:
+        Object.keys(
+          MODEL_MAPPING
+        ).map(
+          (model) => ({
+            id:
+              model,
 
-          object: 'model',
+            object:
+              'model',
 
-          created:
-            Math.floor(
-              Date.now() / 1000
-            ),
+            created:
+              Math.floor(
+                Date.now() /
+                  1000
+              ),
 
-          owned_by:
-            'nvidia-nim-proxy'
-        })
-      )
+            owned_by:
+              'nvidia-nim-proxy'
+          })
+        )
     });
   }
 );
@@ -496,69 +816,11 @@ app.post(
   async (req, res) => {
     let response = null;
 
-    let clientDisconnected =
+    let streamFinished =
       false;
 
-    let streamStarted =
+    let clientClosed =
       false;
-
-    let finished =
-      false;
-
-    let abortController =
-      null;
-
-    // ============================================
-    // CLIENT DISCONNECT
-    // ============================================
-    //
-    // IMPORTANT:
-    //
-    // Do NOT use req.on('close') here.
-    //
-    // The incoming HTTP request can finish while
-    // the outgoing SSE response is still active.
-    //
-    // We monitor the RESPONSE instead.
-    //
-
-    res.on(
-      'close',
-      () => {
-        if (
-          !res.writableEnded
-        ) {
-          clientDisconnected =
-            true;
-
-          console.log(
-            '[Proxy] Client disconnected'
-          );
-
-          if (
-            abortController
-          ) {
-            try {
-              abortController.abort();
-            } catch {
-              // Ignore abort error.
-            }
-          }
-
-          if (
-            response?.data &&
-            typeof response.data.destroy ===
-              'function'
-          ) {
-            try {
-              response.data.destroy();
-            } catch {
-              // Ignore destroy error.
-            }
-          }
-        }
-      }
-    );
 
     try {
       const {
@@ -568,10 +830,11 @@ app.post(
         max_tokens,
         top_p,
         seed
-      } = req.body || {};
+      } =
+        req.body || {};
 
       // ============================================
-      // VALIDATE MESSAGES
+      // VALIDATE
       // ============================================
 
       if (
@@ -579,46 +842,47 @@ app.post(
           messages
         )
       ) {
-        return res
-          .status(400)
-          .json({
-            error: {
-              message:
-                'messages must be an array',
+        return res.status(
+          400
+        ).json({
+          error: {
+            message:
+              'messages must be an array',
 
-              type:
-                'invalid_request_error',
+            type:
+              'invalid_request_error',
 
-              code: 400
-            }
-          });
+            code: 400
+          }
+        });
       }
 
       // ============================================
-      // RESOLVE CLIENT MODEL
+      // RESOLVE MODEL
       // ============================================
-
-      const clientModel =
-        typeof model === 'string'
-          ? model
-          : '';
 
       const nimModel =
         MODEL_MAPPING[
-          clientModel
+          model
         ] ||
         FALLBACK_MODEL;
 
       const step37 =
         isStep37Flash(
           nimModel
-        ) ||
-        isStep37Flash(
-          clientModel
         );
 
+      console.log(
+        `[Proxy] ${model || 'unknown'} -> ${nimModel}` +
+        (
+          step37
+            ? ' [REASONING DISABLED]'
+            : ''
+        )
+      );
+
       // ============================================
-      // BUILD NIM REQUEST
+      // BUILD NVIDIA REQUEST
       // ============================================
 
       const nimRequest = {
@@ -628,7 +892,8 @@ app.post(
         messages,
 
         temperature:
-          temperature ?? 1.0,
+          temperature ??
+          1.0,
 
         max_tokens:
           max_tokens ??
@@ -638,7 +903,8 @@ app.post(
               : 4096
           ),
 
-        stream: true
+        stream:
+          true
       };
 
       // ============================================
@@ -646,7 +912,8 @@ app.post(
       // ============================================
 
       if (
-        top_p !== undefined &&
+        top_p !==
+          undefined &&
         top_p !== null
       ) {
         nimRequest.top_p =
@@ -663,7 +930,8 @@ app.post(
       // ============================================
 
       if (
-        seed !== undefined &&
+        seed !==
+          undefined &&
         seed !== null
       ) {
         nimRequest.seed =
@@ -671,7 +939,7 @@ app.post(
       }
 
       // ============================================
-      // THINKING CONFIG
+      // THINKING
       // ============================================
 
       if (
@@ -691,494 +959,39 @@ app.post(
       // ============================================
 
       console.log(
-        `[Proxy] ${
-          clientModel ||
-          'unknown'
-        } -> ${nimModel}` +
-        (
-          step37
-            ? ' [REASONING DISABLED]'
-            : ''
-        )
+        '[NVIDIA Request] Model:',
+        nimModel
       );
-
-      // ============================================
-      // RETRY LOOP
-      // ============================================
-
-      let successfulResponse =
-        false;
-
-      let lastError =
-        null;
-
-      for (
-        let attempt = 1;
-        attempt <= MAX_ATTEMPTS;
-        attempt++
-      ) {
-        // ==========================================
-        // CLIENT ALREADY GONE
-        // ==========================================
-
-        if (
-          clientDisconnected
-        ) {
-          console.log(
-            '[Proxy] Client disconnected before NVIDIA request; stopping retry cycle'
-          );
-
-          return;
-        }
-
-        console.log(
-          `[NVIDIA Request] Attempt ${attempt}/${MAX_ATTEMPTS}`
-        );
-
-        // New abort controller for every attempt.
-        abortController =
-          new AbortController();
-
-        try {
-          // ========================================
-          // NVIDIA REQUEST
-          // ========================================
-
-          response =
-            await axios.post(
-              `${NIM_API_BASE}/chat/completions`,
-              nimRequest,
-              {
-                headers: {
-                  Authorization:
-                    `Bearer ${NIM_API_KEY}`,
-
-                  'Content-Type':
-                    'application/json',
-
-                  Accept:
-                    'text/event-stream'
-                },
-
-                responseType:
-                  'stream',
-
-                timeout: 0,
-
-                signal:
-                  abortController.signal,
-
-                validateStatus:
-                  () => true
-              }
-            );
-
-          console.log(
-            `[NVIDIA Response] HTTP ${response.status}`
-          );
-
-          // ========================================
-          // SUCCESS
-          // ========================================
-          //
-          // THIS IS CRITICAL:
-          //
-          // Once NVIDIA gives us 200, we NEVER
-          // retry. We immediately start consuming
-          // the SSE stream.
-          //
-
-          if (
-            response.status >= 200 &&
-            response.status < 300
-          ) {
-            successfulResponse =
-              true;
-
-            break;
-          }
-
-          // ========================================
-          // NON-RETRYABLE HTTP ERROR
-          // ========================================
-
-          if (
-            !RETRYABLE_STATUS_CODES.has(
-              response.status
-            )
-          ) {
-            let errorBody =
-              '';
-
-            try {
-              for await (
-                const chunk
-                of response.data
-              ) {
-                errorBody +=
-                  chunk.toString(
-                    'utf8'
-                  );
-
-                if (
-                  errorBody.length >
-                  100000
-                ) {
-                  break;
-                }
-              }
-            } catch {
-              // Ignore.
-            }
-
-            let parsed =
-              errorBody;
-
-            try {
-              parsed =
-                JSON.parse(
-                  errorBody
-                );
-            } catch {
-              // Keep string.
-            }
-
-            const message =
-              typeof parsed ===
-              'string'
-                ? parsed
-                : (
-                    parsed?.error
-                      ?.message ||
-                    parsed?.message ||
-                    `NVIDIA API returned HTTP ${response.status}`
-                  );
-
-            console.error(
-              `[NVIDIA Error] HTTP ${response.status}: ${message}`
-            );
-
-            if (
-              !res.headersSent &&
-              !res.writableEnded
-            ) {
-              return res
-                .status(
-                  response.status
-                )
-                .json({
-                  error: {
-                    message,
-
-                    type:
-                      'nvidia_api_error',
-
-                    code:
-                      response.status
-                  }
-                });
-            }
-
-            return;
-          }
-
-          // ========================================
-          // RETRYABLE HTTP ERROR
-          // ========================================
-
-          let retryBody =
-            '';
-
-          try {
-            for await (
-              const chunk
-              of response.data
-            ) {
-              retryBody +=
-                chunk.toString(
-                  'utf8'
-                );
-
-              if (
-                retryBody.length >
-                100000
-              ) {
-                break;
-              }
-            }
-          } catch {
-            // Ignore.
-          }
-
-          let retryMessage =
-            `NVIDIA API returned HTTP ${response.status}`;
-
-          if (
-            retryBody
-          ) {
-            try {
-              const parsed =
-                JSON.parse(
-                  retryBody
-                );
-
-              retryMessage =
-                parsed?.error
-                  ?.message ||
-                parsed?.message ||
-                retryMessage;
-            } catch {
-              retryMessage =
-                retryBody;
-            }
-          }
-
-          lastError =
-            new Error(
-              retryMessage
-            );
-
-          // ========================================
-          // LAST ATTEMPT
-          // ========================================
-
-          if (
-            attempt >=
-            MAX_ATTEMPTS
-          ) {
-            console.error(
-              `[NVIDIA Retry] Exhausted all ${MAX_ATTEMPTS} attempts`
-            );
-
-            if (
-              !res.headersSent &&
-              !res.writableEnded
-            ) {
-              return res
-                .status(
-                  response.status
-                )
-                .json({
-                  error: {
-                    message:
-                      retryMessage,
-
-                    type:
-                      'nvidia_api_error',
-
-                    code:
-                      response.status
-                  }
-                });
-            }
-
-            return;
-          }
-
-          // ========================================
-          // WAIT BEFORE RETRY
-          // ========================================
-
-          const delay =
-            RETRY_DELAYS[
-              attempt - 1
-            ] ??
-            60_000;
-
-          console.log(
-            `[NVIDIA Retry] HTTP ${response.status}. ` +
-            `Retry ${attempt}/${MAX_ATTEMPTS - 1} ` +
-            `in ${delay / 1000}s`
-          );
-
-          console.log(
-            `[NVIDIA Retry] ${retryMessage}`
-          );
-
-          // ========================================
-          // ABORTABLE WAIT
-          // ========================================
-
-          let remaining =
-            delay;
-
-          while (
-            remaining > 0
-          ) {
-            if (
-              clientDisconnected
-            ) {
-              console.log(
-                '[Proxy] Client disconnected during backoff; stopping retry cycle'
-              );
-
-              return;
-            }
-
-            const wait =
-              Math.min(
-                remaining,
-                1000
-              );
-
-            await sleep(
-              wait
-            );
-
-            remaining -=
-              wait;
-          }
-        } catch (error) {
-          // ========================================
-          // ABORT / CLIENT DISCONNECT
-          // ========================================
-
-          if (
-            clientDisconnected ||
-            error?.code ===
-              'ERR_CANCELED' ||
-            error?.name ===
-              'CanceledError'
-          ) {
-            console.log(
-              '[Proxy] Request aborted because client disconnected'
-            );
-
-            return;
-          }
-
-          lastError =
-            error;
-
-          console.error(
-            `[NVIDIA Request Error] Attempt ${attempt}:`,
-            getSafeErrorMessage(
-              error
-            )
-          );
-
-          // ========================================
-          // LAST ATTEMPT
-          // ========================================
-
-          if (
-            attempt >=
-            MAX_ATTEMPTS
-          ) {
-            break;
-          }
-
-          // ========================================
-          // NETWORK RETRY
-          // ========================================
-
-          const delay =
-            RETRY_DELAYS[
-              attempt - 1
-            ] ??
-            60_000;
-
-          console.log(
-            `[NVIDIA Retry] Network error. ` +
-            `Retry ${attempt}/${MAX_ATTEMPTS - 1} ` +
-            `in ${delay / 1000}s`
-          );
-
-          // ========================================
-          // ABORTABLE WAIT
-          // ========================================
-
-          let remaining =
-            delay;
-
-          while (
-            remaining > 0
-          ) {
-            if (
-              clientDisconnected
-            ) {
-              console.log(
-                '[Proxy] Client disconnected during backoff; stopping retry cycle'
-              );
-
-              return;
-            }
-
-            const wait =
-              Math.min(
-                remaining,
-                1000
-              );
-
-            await sleep(
-              wait
-            );
-
-            remaining -=
-              wait;
-          }
-        }
-      }
-
-      // ============================================
-      // RETRY EXHAUSTED
-      // ============================================
-
-      if (
-        !successfulResponse
-      ) {
-        if (
-          clientDisconnected
-        ) {
-          return;
-        }
-
-        const message =
-          lastError?.message ||
-          'Unable to obtain a successful response from NVIDIA NIM';
-
-        console.error(
-          '[Proxy] Retry cycle exhausted:',
-          message
-        );
-
-        if (
-          !res.headersSent &&
-          !res.writableEnded
-        ) {
-          return res
-            .status(503)
-            .json({
-              error: {
-                message,
-
-                type:
-                  'nvidia_retry_exhausted',
-
-                code: 503
-              }
-            });
-        }
-
-        return;
-      }
-
-      // ============================================
-      // HTTP 200 RECEIVED
-      // ============================================
-      //
-      // NO MORE RETRIES.
-      //
-      // From this point forward, this is purely
-      // an SSE streaming operation.
-      //
 
       console.log(
-        '[NVIDIA Stream] HTTP 200 received; starting SSE stream'
+        '[NVIDIA Request] Streaming: true'
       );
 
-      streamStarted =
-        true;
+      if (
+        step37
+      ) {
+        console.log(
+          '[NVIDIA Request] Step 3.7 reasoning: OFF'
+        );
+      }
+
+      // ============================================
+      // REQUEST NVIDIA
+      // ============================================
+
+      response =
+        await requestNvidia(
+          nimRequest,
+          req
+        );
+
+      // ============================================
+      // NVIDIA SUCCESS
+      // ============================================
+
+      console.log(
+        `[NVIDIA Stream] HTTP ${response.status} - connected`
+      );
 
       // ============================================
       // SSE HEADERS
@@ -1206,7 +1019,10 @@ app.post(
         'no'
       );
 
-      // Flush headers immediately.
+      // ============================================
+      // FLUSH HEADERS IMMEDIATELY
+      // ============================================
+
       if (
         typeof res.flushHeaders ===
         'function'
@@ -1214,29 +1030,38 @@ app.post(
         res.flushHeaders();
       }
 
-      // Send an initial SSE comment to establish
-      // the connection immediately.
+      // Send an initial harmless
+      // SSE comment to force proxies
+      // and clients to recognize the stream.
+      //
+      // This is NOT an OpenAI data chunk.
+      //
+
       try {
         res.write(
           ': connected\n\n'
         );
       } catch {
-        return;
+        // Ignore.
       }
-
-      console.log(
-        '[NVIDIA Stream] Connected'
-      );
 
       // ============================================
       // STREAM STATE
       // ============================================
 
-      let buffer =
-        '';
+      let buffer = '';
 
       let reasoningOpen =
         false;
+
+      let contentChunks =
+        0;
+
+      let reasoningChunks =
+        0;
+
+      let totalBytes =
+        0;
 
       // ============================================
       // SEND DONE
@@ -1244,45 +1069,62 @@ app.post(
 
       function sendDone() {
         if (
-          finished
+          streamFinished
         ) {
           return;
         }
 
-        finished =
+        streamFinished =
           true;
 
-        // ==========================================
-        // CLOSE OPEN THINK BLOCK
-        // ==========================================
+        // ============================================
+        // CLOSE REASONING
+        // ============================================
 
         if (
           SHOW_REASONING &&
-          reasoningOpen &&
-          !step37
+          reasoningOpen
         ) {
           const closeChunk =
             {
+              id:
+                `chatcmpl-proxy-${Date.now()}`,
+
+              object:
+                'chat.completion.chunk',
+
+              created:
+                Math.floor(
+                  Date.now() /
+                    1000
+                ),
+
+              model:
+                model ||
+                nimModel,
+
               choices: [
                 {
+                  index:
+                    0,
+
                   delta: {
                     content:
                       '\n</think>\n'
-                  }
+                  },
+
+                  finish_reason:
+                    null
                 }
               ]
             };
 
           try {
-            if (
-              !res.writableEnded
-            ) {
-              res.write(
-                `data: ${JSON.stringify(
-                  closeChunk
-                )}\n\n`
-              );
-            }
+            res.write(
+              `data: ${JSON.stringify(
+                closeChunk
+              )}\n\n`
+            );
           } catch {
             // Ignore.
           }
@@ -1291,20 +1133,61 @@ app.post(
             false;
         }
 
-        // ==========================================
-        // DONE
-        // ==========================================
+        // ============================================
+        // FINAL FINISH CHUNK
+        // ============================================
+        //
+        // Some OpenAI-compatible clients rely
+        // on an explicit finish_reason chunk.
+        //
+
+        const finishChunk =
+          {
+            id:
+              `chatcmpl-proxy-${Date.now()}`,
+
+            object:
+              'chat.completion.chunk',
+
+            created:
+              Math.floor(
+                Date.now() /
+                  1000
+              ),
+
+            model:
+              model ||
+              nimModel,
+
+            choices: [
+              {
+                index:
+                  0,
+
+                delta: {},
+
+                finish_reason:
+                  'stop'
+              }
+            ]
+          };
 
         try {
           if (
             !res.writableEnded
           ) {
             res.write(
+              `data: ${JSON.stringify(
+                finishChunk
+              )}\n\n`
+            );
+
+            res.write(
               'data: [DONE]\n\n'
             );
           }
         } catch {
-          // Ignore.
+          // Client disconnected.
         }
 
         if (
@@ -1314,7 +1197,10 @@ app.post(
         }
 
         console.log(
-          '[NVIDIA Stream] Complete'
+          `[NVIDIA Stream] Complete ` +
+          `content_chunks=${contentChunks} ` +
+          `reasoning_chunks=${reasoningChunks} ` +
+          `bytes=${totalBytes}`
         );
       }
 
@@ -1324,8 +1210,7 @@ app.post(
 
       function writeSSE(data) {
         if (
-          finished ||
-          clientDisconnected ||
+          streamFinished ||
           res.writableEnded
         ) {
           return;
@@ -1337,7 +1222,9 @@ app.post(
               data
             )}\n\n`
           );
-        } catch (error) {
+        } catch (
+          error
+        ) {
           console.error(
             '[SSE Write Error]',
             error.message
@@ -1346,79 +1233,48 @@ app.post(
       }
 
       // ============================================
-      // PROCESS SSE EVENT
+      // PROCESS SSE DATA
       // ============================================
 
-      function processEvent(
-        eventText
-      ) {
+      function processLine(line) {
+        // Normalize CRLF.
+        line =
+          line.replace(
+            /\r$/,
+            ''
+          );
+
+        // Ignore blank lines.
         if (
-          finished ||
-          clientDisconnected
+          !line.trim()
         ) {
           return;
         }
 
-        const lines =
-          eventText.split(
-            '\n'
-          );
-
-        const dataLines =
-          [];
-
-        for (
-          let lineIndex = 0;
-          lineIndex <
-            lines.length;
-          lineIndex++
+        // Ignore SSE comments.
+        if (
+          line.startsWith(':')
         ) {
-          let line =
-            lines[
-              lineIndex
-            ];
-
-          line =
-            line.replace(
-              /\r$/,
-              ''
-            );
-
-          if (
-            !line ||
-            line.startsWith(':')
-          ) {
-            continue;
-          }
-
-          if (
-            line.startsWith(
-              'data:'
-            )
-          ) {
-            dataLines.push(
-              line
-                .slice(5)
-                .trim()
-            );
-          }
+          return;
         }
 
+        // We only care about data lines.
         if (
-          dataLines.length ===
-          0
+          !line.startsWith(
+            'data:'
+          )
         ) {
           return;
         }
 
         const raw =
-          dataLines.join(
-            '\n'
-          );
+          line
+            .slice(5)
+            .trim();
 
-        // ==========================================
+        // ============================================
         // DONE
-        // ==========================================
+        // ============================================
 
         if (
           raw === '[DONE]'
@@ -1427,9 +1283,15 @@ app.post(
           return;
         }
 
-        // ==========================================
+        if (
+          !raw
+        ) {
+          return;
+        }
+
+        // ============================================
         // PARSE JSON
-        // ==========================================
+        // ============================================
 
         let data;
 
@@ -1438,26 +1300,25 @@ app.post(
             JSON.parse(
               raw
             );
-        } catch (error) {
+        } catch (
+          error
+        ) {
           console.error(
             '[SSE Parse Error]',
-            error.message
-          );
-
-          console.error(
-            '[SSE Raw Data]',
+            error.message,
+            'Raw:',
             raw.slice(
               0,
-              1000
+              500
             )
           );
 
           return;
         }
 
-        // ==========================================
+        // ============================================
         // GET CHOICE
-        // ==========================================
+        // ============================================
 
         const choice =
           data?.choices?.[0];
@@ -1465,11 +1326,9 @@ app.post(
         const delta =
           choice?.delta;
 
-        // Some OpenAI-compatible SSE events contain
-        // usage or other metadata without delta.
-        //
-        // Forward those untouched.
-        //
+        // ============================================
+        // NON-DELTA CHUNK
+        // ============================================
 
         if (
           !delta
@@ -1481,28 +1340,56 @@ app.post(
           return;
         }
 
-        // ==========================================
-        // STEP 3.7 FLASH
-        // REASONING DISABLED
-        // ==========================================
+        // ============================================
+        // STEP 3.7
+        // ============================================
 
         if (
           step37
         ) {
+          // Remove reasoning fields.
+          delete delta.reasoning;
+
+          delete delta.reasoning_content;
+
+          // Clean any stray think tags.
           if (
             typeof delta.content ===
             'string'
           ) {
-            delta.content =
+            const before =
+              delta.content;
+
+            const after =
               cleanStepContent(
-                delta.content
+                before
               );
+
+            if (
+              before !==
+              after
+            ) {
+              console.log(
+                '[Step 3.7] Removed stray <think> tag'
+              );
+            }
+
+            delta.content =
+              after;
           }
 
-          // Never expose upstream reasoning fields.
-          delete delta.reasoning;
+          // Log actual client-visible content.
+          if (
+            delta.content
+          ) {
+            contentChunks++;
 
-          delete delta.reasoning_content;
+            console.log(
+              `[NVIDIA -> Client] content: ${JSON.stringify(
+                delta.content
+              )}`
+            );
+          }
 
           writeSSE(
             data
@@ -1511,10 +1398,9 @@ app.post(
           return;
         }
 
-        // ==========================================
+        // ============================================
         // OTHER MODELS
-        // REASONING
-        // ==========================================
+        // ============================================
 
         const reasoning =
           extractReasoning(
@@ -1530,14 +1416,16 @@ app.post(
         let output =
           '';
 
-        // ==========================================
+        // ============================================
         // REASONING
-        // ==========================================
+        // ============================================
 
         if (
           SHOW_REASONING &&
           reasoning
         ) {
+          reasoningChunks++;
+
           if (
             !reasoningOpen
           ) {
@@ -1552,13 +1440,15 @@ app.post(
             reasoning;
         }
 
-        // ==========================================
-        // NORMAL CONTENT
-        // ==========================================
+        // ============================================
+        // CONTENT
+        // ============================================
 
         if (
           content
         ) {
+          contentChunks++;
+
           if (
             SHOW_REASONING &&
             reasoningOpen
@@ -1574,28 +1464,36 @@ app.post(
             content;
         }
 
-        // ==========================================
-        // CONTENT REPLACEMENT
-        // ==========================================
+        // ============================================
+        // IMPORTANT
+        // ============================================
+        //
+        // If NVIDIA sent reasoning/content,
+        // make absolutely sure the client gets
+        // it through delta.content.
+        //
 
         if (
           output
         ) {
           delta.content =
             output;
+
+          console.log(
+            `[NVIDIA -> Client] content: ${JSON.stringify(
+              output
+            )}`
+          );
         }
 
-        // ==========================================
-        // REMOVE RAW REASONING
-        // ==========================================
-
+        // Remove raw reasoning fields.
         delete delta.reasoning;
 
         delete delta.reasoning_content;
 
-        // ==========================================
-        // FORWARD EVENT
-        // ==========================================
+        // ============================================
+        // FORWARD CHUNK
+        // ============================================
 
         writeSSE(
           data
@@ -1603,16 +1501,14 @@ app.post(
       }
 
       // ============================================
-      // NVIDIA STREAM DATA
+      // NVIDIA DATA
       // ============================================
 
       response.data.on(
         'data',
         (chunk) => {
           if (
-            finished ||
-            clientDisconnected ||
-            res.writableEnded
+            streamFinished
           ) {
             return;
           }
@@ -1622,50 +1518,42 @@ app.post(
               'utf8'
             );
 
+          totalBytes +=
+            Buffer.byteLength(
+              text,
+              'utf8'
+            );
+
           buffer +=
             text;
 
-          // SSE events are separated by a blank
-          // line. Handle both LF and CRLF.
+          // Handle both:
           //
-          // Normalize CRLF first.
-          buffer =
-            buffer.replace(
-              /\r\n/g,
+          // \n
+          // \r\n
+          //
+          const lines =
+            buffer.split(
               '\n'
             );
 
-          let separatorIndex;
+          buffer =
+            lines.pop() ||
+            '';
 
-          while (
-            (
-              separatorIndex =
-                buffer.indexOf(
-                  '\n\n'
-                )
-            ) !== -1
+          for (
+            const line
+            of lines
           ) {
-            const eventText =
-              buffer.slice(
-                0,
-                separatorIndex
-              );
-
-            buffer =
-              buffer.slice(
-                separatorIndex + 2
-              );
-
-            processEvent(
-              eventText
-            );
-
             if (
-              finished ||
-              clientDisconnected
+              streamFinished
             ) {
               break;
             }
+
+            processLine(
+              line
+            );
           }
         }
       );
@@ -1678,27 +1566,31 @@ app.post(
         'end',
         () => {
           if (
-            finished ||
-            clientDisconnected
+            streamFinished
           ) {
             return;
           }
 
-          // Process any remaining complete/partial
-          // event if one exists.
+          // ============================================
+          // PROCESS REMAINING BUFFER
+          // ============================================
+
           if (
             buffer.trim()
           ) {
-            processEvent(
+            processLine(
               buffer
             );
+
+            buffer =
+              '';
           }
 
-          if (
-            !finished
-          ) {
-            sendDone();
-          }
+          // ============================================
+          // ALWAYS FINISH CLIENT STREAM
+          // ============================================
+
+          sendDone();
         }
       );
 
@@ -1709,42 +1601,44 @@ app.post(
       response.data.on(
         'error',
         (error) => {
-          if (
-            clientDisconnected
-          ) {
-            return;
-          }
-
           console.error(
             '[NVIDIA Stream Error]',
             error.message
           );
 
           if (
-            finished ||
-            res.writableEnded
+            streamFinished
           ) {
             return;
           }
 
-          // Once 200 has been received, retries are
-          // intentionally NOT attempted. Send an SSE
-          // error to the client instead.
+          streamFinished =
+            true;
+
+          // If headers have already gone out,
+          // send an SSE error rather than JSON.
           //
 
-          writeSSE({
-            error: {
-              message:
-                error.message ||
-                'NVIDIA stream error',
+          try {
+            if (
+              !res.writableEnded
+            ) {
+              res.write(
+                `data: ${JSON.stringify({
+                  error: {
+                    message:
+                      error.message ||
+                      'NVIDIA stream error',
 
-              type:
-                'stream_error'
+                    type:
+                      'stream_error'
+                  }
+                })}\n\n`
+              );
             }
-          });
-
-          finished =
-            true;
+          } catch {
+            // Ignore.
+          }
 
           if (
             !res.writableEnded
@@ -1753,46 +1647,94 @@ app.post(
           }
         }
       );
-    } catch (error) {
-      // ============================================
-      // SAFE PROXY ERROR
-      // ============================================
 
-      if (
-        clientDisconnected
-      ) {
-        return;
-      }
+      // ============================================
+      // REQUEST CLOSE
+      // ============================================
+      //
+      // DO NOT immediately destroy the NVIDIA
+      // stream here.
+      //
+      // Some reverse proxies / clients can emit
+      // close around the lifecycle of a request.
+      //
+      // Only destroy once the response is actually
+      // finished or the request is truly gone.
+      //
+
+      req.on(
+        'aborted',
+        () => {
+          clientClosed =
+            true;
+
+          console.log(
+            '[Proxy] Client request aborted'
+          );
+
+          if (
+            !streamFinished &&
+            response?.data &&
+            typeof response.data.destroy ===
+              'function'
+          ) {
+            response.data.destroy();
+          }
+        }
+      );
+
+      res.on(
+        'close',
+        () => {
+          if (
+            res.writableEnded
+          ) {
+            return;
+          }
+
+          if (
+            !streamFinished
+          ) {
+            clientClosed =
+              true;
+
+            console.log(
+              '[Proxy] Client response closed before stream completion'
+            );
+
+            if (
+              response?.data &&
+              typeof response.data.destroy ===
+                'function'
+            ) {
+              response.data.destroy();
+            }
+          }
+        }
+      );
+    } catch (
+      error
+    ) {
+      // ============================================
+      // SAFE ERROR HANDLING
+      // ============================================
 
       logProxyError(
         error
       );
 
-      // ==========================================
-      // STREAM ALREADY STARTED
-      // ==========================================
-
       if (
-        streamStarted ||
         res.headersSent ||
         res.writableEnded
       ) {
         if (
           !res.writableEnded
         ) {
-          try {
-            res.end();
-          } catch {
-            // Ignore.
-          }
+          res.end();
         }
 
         return;
       }
-
-      // ==========================================
-      // NORMAL HTTP ERROR
-      // ==========================================
 
       const status =
         error?.response?.status ||
@@ -1803,19 +1745,21 @@ app.post(
           error
         );
 
-      return res
-        .status(status)
-        .json({
-          error: {
-            message,
+      return res.status(
+        status
+      ).json({
+        error: {
+          message,
 
-            type:
-              'invalid_request_error',
+          type:
+            status === 429
+              ? 'rate_limit_error'
+              : 'invalid_request_error',
 
-            code:
-              status
-          }
-        });
+          code:
+            status
+        }
+      });
     }
   }
 );
@@ -1828,36 +1772,30 @@ app.all(
   '*',
   (req, res) => {
     if (
-      res.headersSent ||
-      res.writableEnded
+      res.headersSent
     ) {
-      if (
-        !res.writableEnded
-      ) {
-        res.end();
-      }
-
-      return;
+      return res.end();
     }
 
-    res
-      .status(404)
-      .json({
-        error: {
-          message:
-            `Endpoint ${req.path} not found`,
+    res.status(
+      404
+    ).json({
+      error: {
+        message:
+          `Endpoint ${req.path} not found`,
 
-          type:
-            'invalid_request_error',
+        type:
+          'invalid_request_error',
 
-          code: 404
-        }
-      });
+        code:
+          404
+      }
+    });
   }
 );
 
 // ============================================
-// START SERVER
+// START
 // ============================================
 
 app.listen(
@@ -1924,11 +1862,7 @@ app.listen(
     );
 
     console.log(
-      'Retry delays: 10s -> 30s -> 60s -> 60s -> 60s'
-    );
-
-    console.log(
-      `Maximum attempts: ${MAX_ATTEMPTS}`
+      'Retry schedule: 10s -> 30s -> 60s -> 60s -> 60s'
     );
 
     console.log(

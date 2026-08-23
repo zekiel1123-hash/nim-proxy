@@ -48,9 +48,9 @@ app.use(
 // CONFIG
 // ============================================
 
-// HARD-CODED NVIDIA NIM CHAT COMPLETIONS ENDPOINT
-const NIM_API_ENDPOINT =
-  'https://integrate.api.nvidia.com/v1/chat/completions';
+const NIM_API_BASE =
+  process.env.NIM_API_BASE ||
+  'https://integrate.api.nvidia.com/v1';
 
 const NIM_API_KEY =
   process.env.NIM_API_KEY;
@@ -520,7 +520,7 @@ app.post(
 
       response =
         await axios.post(
-          NIM_API_ENDPOINT,
+          `${NIM_API_BASE}/chat/completions`,
           nimRequest,
           {
             headers: {
@@ -1169,7 +1169,7 @@ app.listen(
     );
 
     console.log(
-      `API endpoint: ${NIM_API_ENDPOINT}`
+      `API base: ${NIM_API_BASE}`
     );
 
     console.log(

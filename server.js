@@ -197,17 +197,6 @@ function extractReasoning(delta) {
 // ============================================
 // REMOVE STRAY STEP THINK TAGS
 // ============================================
-//
-// Step 3.7 Flash can sometimes emit a closing
-// </think> even when we are intentionally not
-// exposing reasoning.
-//
-// Remove the tags instead of showing:
-//
-// </think>
-//
-// to the client.
-//
 
 function cleanStepContent(content) {
   if (
@@ -225,20 +214,8 @@ function cleanStepContent(content) {
 // ============================================
 // SAFE ERROR SERIALIZATION
 // ============================================
-//
-// NEVER send Axios response.data directly into
-// res.json().
-//
-// When responseType = "stream", response.data
-// can be a stream object and may contain circular
-// references.
-//
-// This function converts the error into a safe
-// plain string/object.
-//
 
 function getSafeErrorMessage(error) {
-  // Axios response exists
   if (error?.response) {
     const status =
       error.response.status;
@@ -246,14 +223,12 @@ function getSafeErrorMessage(error) {
     const data =
       error.response.data;
 
-    // String response
     if (
       typeof data === 'string'
     ) {
       return data;
     }
 
-    // Normal JSON object
     if (
       data &&
       typeof data === 'object'
@@ -286,7 +261,6 @@ function getSafeErrorMessage(error) {
     return `NVIDIA API returned HTTP ${status}`;
   }
 
-  // Axios/network error
   if (error?.message) {
     return error.message;
   }
@@ -482,13 +456,6 @@ app.post(
       // ============================================
       // THINKING CONFIG
       // ============================================
-      //
-      // Step 3.7 Flash intentionally receives
-      // nothing here.
-      //
-      // GLM / Kimi / DeepSeek receive their
-      // respective model-specific parameters.
-      //
 
       if (
         ENABLE_THINKING_MODE &&
@@ -505,13 +472,18 @@ app.post(
       // ============================================
       // DEBUG INFORMATION
       // ============================================
-      //
-      // Do NOT log the API key.
-      //
 
       console.log(
         `[Request] ${model || 'unknown'} -> ${nimModel}` +
         `${step37 ? ' [REASONING DISABLED]' : ''}`
+      );
+
+      // ============================================
+      // NVIDIA REQUEST START
+      // ============================================
+
+      console.log(
+        `[NVIDIA Request Starting] ${nimModel}`
       );
 
       // ============================================
@@ -537,13 +509,18 @@ app.post(
             responseType:
               'stream',
 
-            // Do not let Axios automatically
-            // reject based on HTTP status before
-            // we can safely inspect the response.
             validateStatus:
               () => true
           }
         );
+
+      // ============================================
+      // NVIDIA RESPONSE RECEIVED
+      // ============================================
+
+      console.log(
+        `[NVIDIA Response Received] HTTP ${response.status}`
+      );
 
       // ============================================
       // HANDLE NVIDIA HTTP ERROR
@@ -563,8 +540,6 @@ app.post(
             errorBody +=
               chunk.toString();
 
-            // Prevent pathological
-            // error responses.
             if (
               errorBody.length >
               100000
@@ -671,12 +646,6 @@ app.post(
 
         finished = true;
 
-        // For models where reasoning is enabled,
-        // close an unfinished <think> block.
-        //
-        // Step 3.7 never enters this state because
-        // reasoning is disabled for that model.
-
         if (
           SHOW_REASONING &&
           reasoningOpen
@@ -750,26 +719,22 @@ app.post(
       // ============================================
 
       function processLine(line) {
-        // Remove CR from CRLF streams
         line =
           line.replace(
             /\r$/,
             ''
           );
 
-        // Ignore blank lines
         if (!line.trim()) {
           return;
         }
 
-        // Ignore comments
         if (
           line.startsWith(':')
         ) {
           return;
         }
 
-        // NVIDIA sends SSE data lines
         if (
           !line.startsWith(
             'data:'
@@ -790,6 +755,10 @@ app.post(
         if (
           raw === '[DONE]'
         ) {
+          console.log(
+            '[NVIDIA Stream] Received [DONE]'
+          );
+
           sendDone();
           return;
         }
@@ -809,8 +778,22 @@ app.post(
             error.message
           );
 
+          console.error(
+            '[SSE Raw Data]',
+            raw
+          );
+
           return;
         }
+
+        // ============================================
+        // DEBUG STREAM DATA
+        // ============================================
+
+        console.log(
+          '[NVIDIA Stream Data]',
+          JSON.stringify(data)
+        );
 
         // ============================================
         // GET DELTA
@@ -831,14 +814,6 @@ app.post(
         // STEP 3.7 FLASH
         // REASONING DISABLED
         // ============================================
-        //
-        // Do NOT create <think>.
-        // Do NOT close/open reasoning.
-        // Do NOT expose reasoning fields.
-        //
-        // If the model happens to put a stray
-        // </think> into content, remove it.
-        //
 
         if (step37) {
           if (
@@ -948,6 +923,10 @@ app.post(
       // STREAM DATA
       // ============================================
 
+      console.log(
+        `[NVIDIA Stream] Connected for ${nimModel}`
+      );
+
       response.data.on(
         'data',
         (chunk) => {
@@ -957,6 +936,10 @@ app.post(
           ) {
             return;
           }
+
+          console.log(
+            `[NVIDIA Stream Chunk] ${chunk.length} bytes`
+          );
 
           buffer +=
             chunk.toString(
@@ -994,8 +977,10 @@ app.post(
       response.data.on(
         'end',
         () => {
-          // Process any remaining buffered
-          // complete line.
+          console.log(
+            '[NVIDIA Stream] Ended'
+          );
+
           if (
             buffer.trim()
           ) {
@@ -1025,11 +1010,6 @@ app.post(
             !res.writableEnded
           ) {
             try {
-              // SSE-compatible error
-              // instead of attempting
-              // res.json() after streaming
-              // has already started.
-
               writeSSE({
                 error: {
                   message:
@@ -1062,6 +1042,10 @@ app.post(
       req.on(
         'close',
         () => {
+          console.log(
+            `[Client] Disconnected from ${nimModel}`
+          );
+
           if (
             !finished &&
             response?.data &&
@@ -1081,8 +1065,6 @@ app.post(
 
       logProxyError(error);
 
-      // If streaming has already begun,
-      // do NOT attempt res.json().
       if (
         res.headersSent ||
         res.writableEnded
@@ -1190,7 +1172,6 @@ app.listen(
           ? 'ENABLED'
           : 'DISABLED'
       }`
-
     );
 
     console.log(

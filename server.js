@@ -14,6 +14,8 @@
 // - No reasoning_effort is sent.
 // - No <think> tags are generated.
 // - Stray </think> emitted by upstream is removed.
+// - Step 3.7 gets a larger generation budget so internal
+//   reasoning does not consume the entire output budget.
 //
 // Other models:
 // - Reasoning output remains enabled when SHOW_REASONING = true.
@@ -419,7 +421,7 @@ app.post(
         max_tokens:
           max_tokens ?? (
             step37
-              ? 16384
+              ? 32768
               : 4096
           ),
 
@@ -456,6 +458,13 @@ app.post(
       // ============================================
       // THINKING CONFIG
       // ============================================
+      //
+      // Step 3.7 Flash intentionally receives
+      // nothing here.
+      //
+      // GLM / Kimi / DeepSeek receive their
+      // respective model-specific parameters.
+      //
 
       if (
         ENABLE_THINKING_MODE &&
@@ -476,14 +485,6 @@ app.post(
       console.log(
         `[Request] ${model || 'unknown'} -> ${nimModel}` +
         `${step37 ? ' [REASONING DISABLED]' : ''}`
-      );
-
-      // ============================================
-      // NVIDIA REQUEST START
-      // ============================================
-
-      console.log(
-        `[NVIDIA Request Starting] ${nimModel}`
       );
 
       // ============================================
@@ -513,14 +514,6 @@ app.post(
               () => true
           }
         );
-
-      // ============================================
-      // NVIDIA RESPONSE RECEIVED
-      // ============================================
-
-      console.log(
-        `[NVIDIA Response Received] HTTP ${response.status}`
-      );
 
       // ============================================
       // HANDLE NVIDIA HTTP ERROR
@@ -646,6 +639,12 @@ app.post(
 
         finished = true;
 
+        // For models where reasoning is enabled,
+        // close an unfinished <think> block.
+        //
+        // Step 3.7 never enters this state because
+        // reasoning is disabled for that model.
+
         if (
           SHOW_REASONING &&
           reasoningOpen
@@ -719,22 +718,26 @@ app.post(
       // ============================================
 
       function processLine(line) {
+        // Remove CR from CRLF streams
         line =
           line.replace(
             /\r$/,
             ''
           );
 
+        // Ignore blank lines
         if (!line.trim()) {
           return;
         }
 
+        // Ignore comments
         if (
           line.startsWith(':')
         ) {
           return;
         }
 
+        // NVIDIA sends SSE data lines
         if (
           !line.startsWith(
             'data:'
@@ -755,10 +758,6 @@ app.post(
         if (
           raw === '[DONE]'
         ) {
-          console.log(
-            '[NVIDIA Stream] Received [DONE]'
-          );
-
           sendDone();
           return;
         }
@@ -778,22 +777,8 @@ app.post(
             error.message
           );
 
-          console.error(
-            '[SSE Raw Data]',
-            raw
-          );
-
           return;
         }
-
-        // ============================================
-        // DEBUG STREAM DATA
-        // ============================================
-
-        console.log(
-          '[NVIDIA Stream Data]',
-          JSON.stringify(data)
-        );
 
         // ============================================
         // GET DELTA
@@ -814,6 +799,20 @@ app.post(
         // STEP 3.7 FLASH
         // REASONING DISABLED
         // ============================================
+        //
+        // Step 3.7 can emit reasoning_content even
+        // when no thinking parameter is supplied.
+        //
+        // Do NOT expose that reasoning.
+        //
+        // IMPORTANT:
+        // If the chunk contains only reasoning_content
+        // and no actual content, do not forward an
+        // empty assistant delta to the client.
+        //
+        // This prevents the client from interpreting
+        // a reasoning-only chunk as the model's answer.
+        //
 
         if (step37) {
           if (
@@ -826,9 +825,31 @@ app.post(
               );
           }
 
+          const hasContent =
+            typeof delta.content ===
+              'string' &&
+            delta.content.length >
+              0;
+
+          const hasReasoning =
+            typeof delta.reasoning_content ===
+              'string' &&
+            delta.reasoning_content.length >
+              0;
+
+          // Remove all upstream reasoning.
           delete delta.reasoning;
 
           delete delta.reasoning_content;
+
+          // If this was a reasoning-only chunk,
+          // do not send an empty delta to the client.
+          if (
+            hasReasoning &&
+            !hasContent
+          ) {
+            return;
+          }
 
           writeSSE(data);
 
@@ -923,10 +944,6 @@ app.post(
       // STREAM DATA
       // ============================================
 
-      console.log(
-        `[NVIDIA Stream] Connected for ${nimModel}`
-      );
-
       response.data.on(
         'data',
         (chunk) => {
@@ -936,10 +953,6 @@ app.post(
           ) {
             return;
           }
-
-          console.log(
-            `[NVIDIA Stream Chunk] ${chunk.length} bytes`
-          );
 
           buffer +=
             chunk.toString(
@@ -977,10 +990,8 @@ app.post(
       response.data.on(
         'end',
         () => {
-          console.log(
-            '[NVIDIA Stream] Ended'
-          );
-
+          // Process any remaining buffered
+          // complete line.
           if (
             buffer.trim()
           ) {
@@ -1042,10 +1053,6 @@ app.post(
       req.on(
         'close',
         () => {
-          console.log(
-            `[Client] Disconnected from ${nimModel}`
-          );
-
           if (
             !finished &&
             response?.data &&
@@ -1065,6 +1072,8 @@ app.post(
 
       logProxyError(error);
 
+      // If streaming has already begun,
+      // do NOT attempt res.json().
       if (
         res.headersSent ||
         res.writableEnded

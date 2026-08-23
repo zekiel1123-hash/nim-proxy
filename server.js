@@ -10,7 +10,7 @@
 //
 // Step 3.7 Flash:
 // - Thinking/reasoning output is intentionally DISABLED.
-// - chat_template_kwargs.thinking = false is sent.
+// - No chat_template_kwargs are sent.
 // - No reasoning_effort is sent.
 // - No <think> tags are generated.
 // - Stray </think> emitted by upstream is removed.
@@ -109,21 +109,15 @@ function isStep37Flash(model) {
 //
 // IMPORTANT:
 //
-// Step 3.7 Flash has reasoning ENABLED by default.
+// Step 3.7 Flash intentionally gets NO thinking
+// parameters.
 //
-// NVIDIA's documentation specifically says to
-// disable reasoning by sending:
+// NVIDIA's published Step 3.7 Flash API example
+// does not send chat_template_kwargs,
+// reasoning_effort, or another thinking flag.
 //
-// chat_template_kwargs: {
-//   thinking: false
-// }
-//
-// This is required even though we do not want
-// reasoning exposed to the client.
-//
-// include_reasoning: false is NOT supported
-// for streaming responses, so it is intentionally
-// not used here.
+// This prevents the proxy from trying to force
+// reasoning output from the model.
 //
 
 function buildThinkingConfig(model) {
@@ -133,11 +127,7 @@ function buildThinkingConfig(model) {
   // ============================================
 
   if (isStep37Flash(model)) {
-    return {
-      chat_template_kwargs: {
-        thinking: false
-      }
-    };
+    return {};
   }
 
   // ============================================
@@ -208,11 +198,15 @@ function extractReasoning(delta) {
 // REMOVE STRAY STEP THINK TAGS
 // ============================================
 //
-// Step 3.7 Flash should no longer generate
-// reasoning after thinking=false is sent.
+// Step 3.7 Flash can sometimes emit a closing
+// </think> even when we are intentionally not
+// exposing reasoning.
 //
-// This remains as a safety cleanup in case
-// upstream still emits a stray tag.
+// Remove the tags instead of showing:
+//
+// </think>
+//
+// to the client.
 //
 
 function cleanStepContent(content) {
@@ -231,6 +225,17 @@ function cleanStepContent(content) {
 // ============================================
 // SAFE ERROR SERIALIZATION
 // ============================================
+//
+// NEVER send Axios response.data directly into
+// res.json().
+//
+// When responseType = "stream", response.data
+// can be a stream object and may contain circular
+// references.
+//
+// This function converts the error into a safe
+// plain string/object.
+//
 
 function getSafeErrorMessage(error) {
   // Axios response exists
@@ -440,7 +445,7 @@ app.post(
         max_tokens:
           max_tokens ?? (
             step37
-              ? 4096
+              ? 16384
               : 4096
           ),
 
@@ -478,18 +483,16 @@ app.post(
       // THINKING CONFIG
       // ============================================
       //
-      // Step 3.7 Flash now explicitly receives:
+      // Step 3.7 Flash intentionally receives
+      // nothing here.
       //
-      // chat_template_kwargs: {
-      //   thinking: false
-      // }
-      //
-      // This is the NVIDIA-documented way to
-      // disable reasoning for Step 3.7 Flash.
+      // GLM / Kimi / DeepSeek receive their
+      // respective model-specific parameters.
       //
 
       if (
-        ENABLE_THINKING_MODE
+        ENABLE_THINKING_MODE &&
+        !step37
       ) {
         Object.assign(
           nimRequest,
@@ -502,6 +505,9 @@ app.post(
       // ============================================
       // DEBUG INFORMATION
       // ============================================
+      //
+      // Do NOT log the API key.
+      //
 
       console.log(
         `[Request] ${model || 'unknown'} -> ${nimModel}` +
@@ -669,7 +675,7 @@ app.post(
         // close an unfinished <think> block.
         //
         // Step 3.7 never enters this state because
-        // reasoning is explicitly disabled.
+        // reasoning is disabled for that model.
 
         if (
           SHOW_REASONING &&
@@ -826,11 +832,12 @@ app.post(
         // REASONING DISABLED
         // ============================================
         //
-        // NVIDIA should now return normal content
-        // because thinking=false was explicitly sent.
+        // Do NOT create <think>.
+        // Do NOT close/open reasoning.
+        // Do NOT expose reasoning fields.
         //
-        // We still remove any unexpected reasoning
-        // fields defensively.
+        // If the model happens to put a stray
+        // </think> into content, remove it.
         //
 
         if (step37) {
@@ -1183,6 +1190,7 @@ app.listen(
           ? 'ENABLED'
           : 'DISABLED'
       }`
+
     );
 
     console.log(

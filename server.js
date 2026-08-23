@@ -10,12 +10,10 @@
 //
 // Step 3.7 Flash:
 // - Thinking/reasoning output is intentionally DISABLED.
-// - No chat_template_kwargs are sent.
+// - chat_template_kwargs.thinking = false is sent.
 // - No reasoning_effort is sent.
 // - No <think> tags are generated.
 // - Stray </think> emitted by upstream is removed.
-// - Step 3.7 gets a larger generation budget so internal
-//   reasoning does not consume the entire output budget.
 //
 // Other models:
 // - Reasoning output remains enabled when SHOW_REASONING = true.
@@ -111,15 +109,21 @@ function isStep37Flash(model) {
 //
 // IMPORTANT:
 //
-// Step 3.7 Flash intentionally gets NO thinking
-// parameters.
+// Step 3.7 Flash has reasoning ENABLED by default.
 //
-// NVIDIA's published Step 3.7 Flash API example
-// does not send chat_template_kwargs,
-// reasoning_effort, or another thinking flag.
+// NVIDIA's documentation specifically says to
+// disable reasoning by sending:
 //
-// This prevents the proxy from trying to force
-// reasoning output from the model.
+// chat_template_kwargs: {
+//   thinking: false
+// }
+//
+// This is required even though we do not want
+// reasoning exposed to the client.
+//
+// include_reasoning: false is NOT supported
+// for streaming responses, so it is intentionally
+// not used here.
 //
 
 function buildThinkingConfig(model) {
@@ -129,7 +133,11 @@ function buildThinkingConfig(model) {
   // ============================================
 
   if (isStep37Flash(model)) {
-    return {};
+    return {
+      chat_template_kwargs: {
+        thinking: false
+      }
+    };
   }
 
   // ============================================
@@ -199,6 +207,13 @@ function extractReasoning(delta) {
 // ============================================
 // REMOVE STRAY STEP THINK TAGS
 // ============================================
+//
+// Step 3.7 Flash should no longer generate
+// reasoning after thinking=false is sent.
+//
+// This remains as a safety cleanup in case
+// upstream still emits a stray tag.
+//
 
 function cleanStepContent(content) {
   if (
@@ -218,6 +233,7 @@ function cleanStepContent(content) {
 // ============================================
 
 function getSafeErrorMessage(error) {
+  // Axios response exists
   if (error?.response) {
     const status =
       error.response.status;
@@ -225,12 +241,14 @@ function getSafeErrorMessage(error) {
     const data =
       error.response.data;
 
+    // String response
     if (
       typeof data === 'string'
     ) {
       return data;
     }
 
+    // Normal JSON object
     if (
       data &&
       typeof data === 'object'
@@ -263,6 +281,7 @@ function getSafeErrorMessage(error) {
     return `NVIDIA API returned HTTP ${status}`;
   }
 
+  // Axios/network error
   if (error?.message) {
     return error.message;
   }
@@ -421,7 +440,7 @@ app.post(
         max_tokens:
           max_tokens ?? (
             step37
-              ? 32768
+              ? 4096
               : 4096
           ),
 
@@ -459,16 +478,18 @@ app.post(
       // THINKING CONFIG
       // ============================================
       //
-      // Step 3.7 Flash intentionally receives
-      // nothing here.
+      // Step 3.7 Flash now explicitly receives:
       //
-      // GLM / Kimi / DeepSeek receive their
-      // respective model-specific parameters.
+      // chat_template_kwargs: {
+      //   thinking: false
+      // }
+      //
+      // This is the NVIDIA-documented way to
+      // disable reasoning for Step 3.7 Flash.
       //
 
       if (
-        ENABLE_THINKING_MODE &&
-        !step37
+        ENABLE_THINKING_MODE
       ) {
         Object.assign(
           nimRequest,
@@ -510,6 +531,9 @@ app.post(
             responseType:
               'stream',
 
+            // Do not let Axios automatically
+            // reject based on HTTP status before
+            // we can safely inspect the response.
             validateStatus:
               () => true
           }
@@ -533,6 +557,8 @@ app.post(
             errorBody +=
               chunk.toString();
 
+            // Prevent pathological
+            // error responses.
             if (
               errorBody.length >
               100000
@@ -643,7 +669,7 @@ app.post(
         // close an unfinished <think> block.
         //
         // Step 3.7 never enters this state because
-        // reasoning is disabled for that model.
+        // reasoning is explicitly disabled.
 
         if (
           SHOW_REASONING &&
@@ -800,18 +826,11 @@ app.post(
         // REASONING DISABLED
         // ============================================
         //
-        // Step 3.7 can emit reasoning_content even
-        // when no thinking parameter is supplied.
+        // NVIDIA should now return normal content
+        // because thinking=false was explicitly sent.
         //
-        // Do NOT expose that reasoning.
-        //
-        // IMPORTANT:
-        // If the chunk contains only reasoning_content
-        // and no actual content, do not forward an
-        // empty assistant delta to the client.
-        //
-        // This prevents the client from interpreting
-        // a reasoning-only chunk as the model's answer.
+        // We still remove any unexpected reasoning
+        // fields defensively.
         //
 
         if (step37) {
@@ -825,31 +844,9 @@ app.post(
               );
           }
 
-          const hasContent =
-            typeof delta.content ===
-              'string' &&
-            delta.content.length >
-              0;
-
-          const hasReasoning =
-            typeof delta.reasoning_content ===
-              'string' &&
-            delta.reasoning_content.length >
-              0;
-
-          // Remove all upstream reasoning.
           delete delta.reasoning;
 
           delete delta.reasoning_content;
-
-          // If this was a reasoning-only chunk,
-          // do not send an empty delta to the client.
-          if (
-            hasReasoning &&
-            !hasContent
-          ) {
-            return;
-          }
 
           writeSSE(data);
 
@@ -1021,6 +1018,11 @@ app.post(
             !res.writableEnded
           ) {
             try {
+              // SSE-compatible error
+              // instead of attempting
+              // res.json() after streaming
+              // has already started.
+
               writeSSE({
                 error: {
                   message:

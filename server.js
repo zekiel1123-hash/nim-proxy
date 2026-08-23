@@ -48,12 +48,12 @@ app.use(
 // CONFIG
 // ============================================
 
-const NIM_API_BASE =
-  process.env.NIM_API_BASE ||
-  'https://integrate.api.nvidia.com/v1';
-
 const NIM_API_KEY =
   process.env.NIM_API_KEY;
+
+// HARD-CODED NVIDIA NIM CHAT COMPLETIONS ENDPOINT
+const NVIDIA_CHAT_COMPLETIONS_URL =
+  'https://integrate.api.nvidia.com/v1/chat/completions';
 
 // Display reasoning in <think> blocks
 const SHOW_REASONING = true;
@@ -98,7 +98,9 @@ function isStep37Flash(model) {
     typeof model === 'string' &&
     (
       model.includes('step-3.7-flash') ||
-      model.includes('stepfun-ai/step-3.7-flash')
+      model.includes(
+        'stepfun-ai/step-3.7-flash'
+      )
     )
   );
 }
@@ -514,13 +516,17 @@ app.post(
         `${step37 ? ' [REASONING DISABLED]' : ''}`
       );
 
+      console.log(
+        `[NVIDIA URL] ${NVIDIA_CHAT_COMPLETIONS_URL}`
+      );
+
       // ============================================
       // NVIDIA REQUEST
       // ============================================
 
       response =
         await axios.post(
-          `${NIM_API_BASE}/chat/completions`,
+          NVIDIA_CHAT_COMPLETIONS_URL,
           nimRequest,
           {
             headers: {
@@ -1169,7 +1175,7 @@ app.listen(
     );
 
     console.log(
-      `API base: ${NIM_API_BASE}`
+      `NVIDIA endpoint: ${NVIDIA_CHAT_COMPLETIONS_URL}`
     );
 
     console.log(
@@ -1190,7 +1196,6 @@ app.listen(
           ? 'ENABLED'
           : 'DISABLED'
       }`
-
     );
 
     console.log(
@@ -1199,6 +1204,10 @@ app.listen(
 
     console.log(
       'Streaming only: ENABLED'
+    );
+
+    console.log(
+      'Retry/backoff: DISABLED'
     );
 
     console.log(

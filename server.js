@@ -1,22 +1,23 @@
 // server.js
 // OpenAI-compatible NVIDIA NIM proxy
-//
 // NON-STREAMING
+// NO RETRIES
 //
 // Models:
-// - glm-5.2        -> z-ai/glm-5.2
-// - kimi-k2.6      -> moonshotai/kimi-k2.6
-// - deepseek-v4    -> deepseek-ai/deepseek-v4-pro
-// - step-3.7-flash  -> stepfun-ai/step-3.7-flash
+// - glm-5.2          -> z-ai/glm-5.2
+// - kimi-k2.6        -> moonshotai/kimi-k2.6
+// - deepseek-v4      -> deepseek-ai/deepseek-v4-pro
+// - step-3.7-flash   -> stepfun-ai/step-3.7-flash
 //
-// IMPORTANT:
-// - NVIDIA endpoint is hard-coded.
-// - No retry logic.
-// - No exponential backoff.
-// - No streaming.
-// - Step 3.7 Flash reasoning is disabled.
-// - Other models can expose reasoning when enabled.
+// Step 3.7 Flash:
+// - Thinking/reasoning output is intentionally DISABLED.
+// - No chat_template_kwargs are sent.
+// - No reasoning_effort is sent.
+// - No <think> tags are generated.
+// - Stray </think> emitted by upstream is removed.
 //
+// Other models:
+// - Reasoning output remains enabled when SHOW_REASONING = true.
 
 const express = require('express');
 const cors = require('cors');
@@ -49,7 +50,7 @@ app.use(
 // ============================================
 
 // HARD-CODED NVIDIA NIM CHAT COMPLETIONS ENDPOINT
-const NIM_CHAT_ENDPOINT =
+const NIM_API_ENDPOINT =
   'https://integrate.api.nvidia.com/v1/chat/completions';
 
 const NIM_API_KEY =
@@ -110,7 +111,6 @@ function isStep37Flash(model) {
 // ============================================
 
 function buildThinkingConfig(model) {
-
   // ============================================
   // STEP 3.7 FLASH
   // REASONING DISABLED
@@ -172,20 +172,20 @@ function buildThinkingConfig(model) {
 // REASONING EXTRACTION
 // ============================================
 
-function extractReasoning(delta) {
-  if (!delta) {
+function extractReasoning(data) {
+  if (!data) {
     return '';
   }
 
   return (
-    delta.reasoning ||
-    delta.reasoning_content ||
+    data.reasoning ||
+    data.reasoning_content ||
     ''
   );
 }
 
 // ============================================
-// CLEAN STEP 3.7 CONTENT
+// REMOVE STRAY STEP THINK TAGS
 // ============================================
 
 function cleanStepContent(content) {
@@ -206,13 +206,11 @@ function cleanStepContent(content) {
 // ============================================
 
 function getSafeErrorMessage(error) {
-
   // ============================================
   // AXIOS RESPONSE
   // ============================================
 
   if (error?.response) {
-
     const status =
       error.response.status;
 
@@ -232,12 +230,9 @@ function getSafeErrorMessage(error) {
       typeof data === 'object'
     ) {
       try {
-
         if (data.error) {
-
           if (
-            typeof data.error ===
-            'string'
+            typeof data.error === 'string'
           ) {
             return data.error;
           }
@@ -254,7 +249,6 @@ function getSafeErrorMessage(error) {
         }
 
         return JSON.stringify(data);
-
       } catch {
         return (
           `NVIDIA API returned HTTP ${status}`
@@ -283,7 +277,6 @@ function getSafeErrorMessage(error) {
 // ============================================
 
 function logProxyError(error) {
-
   const status =
     error?.response?.status;
 
@@ -304,13 +297,10 @@ function logProxyError(error) {
 // ============================================
 
 app.get('/health', (req, res) => {
-
   res.json({
     status: 'ok',
 
     streaming_only: false,
-
-    streaming: false,
 
     reasoning_display:
       SHOW_REASONING,
@@ -322,10 +312,9 @@ app.get('/health', (req, res) => {
       FALLBACK_MODEL,
 
     endpoint:
-      NIM_CHAT_ENDPOINT,
+      NIM_API_ENDPOINT,
 
     models: {
-
       'glm-5.2': {
         reasoning: true
       },
@@ -350,7 +339,6 @@ app.get('/health', (req, res) => {
 // ============================================
 
 app.get('/v1/models', (req, res) => {
-
   res.json({
     object: 'list',
 
@@ -375,14 +363,13 @@ app.get('/v1/models', (req, res) => {
 // ============================================
 // CHAT COMPLETIONS
 // NON-STREAMING
+// NO RETRIES
 // ============================================
 
 app.post(
   '/v1/chat/completions',
   async (req, res) => {
-
     try {
-
       const {
         model,
         messages,
@@ -399,7 +386,6 @@ app.post(
       if (
         !Array.isArray(messages)
       ) {
-
         return res.status(400).json({
           error: {
             message:
@@ -411,7 +397,6 @@ app.post(
             code: 400
           }
         });
-
       }
 
       // ============================================
@@ -426,13 +411,11 @@ app.post(
         isStep37Flash(nimModel);
 
       // ============================================
-      // BUILD REQUEST
+      // BUILD NVIDIA REQUEST
       // ============================================
 
       const nimRequest = {
-
-        model:
-          nimModel,
+        model: nimModel,
 
         messages,
 
@@ -440,16 +423,11 @@ app.post(
           temperature ?? 1.0,
 
         max_tokens:
-          max_tokens ??
-          (
+          max_tokens ?? (
             step37
               ? 16384
               : 4096
           ),
-
-        // ==========================================
-        // NON-STREAMING
-        // ==========================================
 
         stream: false
       };
@@ -462,14 +440,10 @@ app.post(
         top_p !== undefined &&
         top_p !== null
       ) {
-
         nimRequest.top_p =
           top_p;
-
       } else if (step37) {
-
-        nimRequest.top_p =
-          0.95;
+        nimRequest.top_p = 0.95;
       }
 
       // ============================================
@@ -480,7 +454,6 @@ app.post(
         seed !== undefined &&
         seed !== null
       ) {
-
         nimRequest.seed =
           seed;
       }
@@ -488,12 +461,17 @@ app.post(
       // ============================================
       // THINKING CONFIG
       // ============================================
+      //
+      // Step 3.7 Flash gets NOTHING.
+      //
+      // Other supported reasoning models get
+      // their model-specific thinking parameters.
+      //
 
       if (
         ENABLE_THINKING_MODE &&
         !step37
       ) {
-
         Object.assign(
           nimRequest,
           buildThinkingConfig(
@@ -507,15 +485,8 @@ app.post(
       // ============================================
 
       console.log(
-        `[Proxy] ${model || 'unknown'} -> ${nimModel}` +
-        `${step37
-          ? ' [REASONING DISABLED]'
-          : ' [REASONING ENABLED]'}`
-      );
-
-      console.log(
-        '[NVIDIA Request] POST',
-        NIM_CHAT_ENDPOINT
+        `[NVIDIA Request] ${model || 'unknown'} -> ${nimModel}` +
+        `${step37 ? ' [REASONING DISABLED]' : ''}`
       );
 
       // ============================================
@@ -523,18 +494,17 @@ app.post(
       // ============================================
       //
       // IMPORTANT:
-      // There is intentionally NO retry logic here.
       //
-      // If NVIDIA returns 429, 4xx, 5xx, etc.,
-      // that response is passed back immediately.
+      // The endpoint is deliberately hard-coded.
       //
-      // stream: false means Axios receives the
-      // complete JSON response.
+      // No retries.
+      // No exponential backoff.
+      // No streaming.
       //
 
       const response =
         await axios.post(
-          NIM_CHAT_ENDPOINT,
+          NIM_API_ENDPOINT,
           nimRequest,
           {
             headers: {
@@ -551,31 +521,19 @@ app.post(
             responseType:
               'json',
 
-            timeout:
-              300000,
-
             validateStatus:
               () => true
           }
         );
 
       // ============================================
-      // LOG STATUS
-      // ============================================
-
-      console.log(
-        `[NVIDIA Response] HTTP ${response.status}`
-      );
-
-      // ============================================
-      // NVIDIA ERROR
+      // NVIDIA HTTP ERROR
       // ============================================
 
       if (
         response.status < 200 ||
         response.status >= 300
       ) {
-
         const data =
           response.data;
 
@@ -584,90 +542,39 @@ app.post(
         if (
           typeof data === 'string'
         ) {
-
           message = data;
-
-        } else if (
-          data?.error?.message
-        ) {
-
-          message =
-            data.error.message;
-
-        } else if (
-          data?.message
-        ) {
-
-          message =
-            data.message;
-
         } else {
-
-          try {
-
-            message =
-              JSON.stringify(
-                data
-              );
-
-          } catch {
-
-            message =
-              `NVIDIA API returned HTTP ${response.status}`;
-          }
+          message =
+            data?.error?.message ||
+            data?.message ||
+            `NVIDIA API returned HTTP ${response.status}`;
         }
 
         console.error(
           `[NVIDIA Error] HTTP ${response.status}: ${message}`
         );
 
-        return res
-          .status(response.status)
-          .json({
-            error: {
-              message,
-
-              type:
-                'nvidia_api_error',
-
-              code:
-                response.status
-            }
-          });
-      }
-
-      // ============================================
-      // SUCCESS
-      // ============================================
-
-      const data =
-        response.data;
-
-      // ============================================
-      // SAFETY CHECK
-      // ============================================
-
-      if (
-        !data ||
-        typeof data !== 'object'
-      ) {
-
-        console.error(
-          '[Proxy] NVIDIA returned an invalid JSON response'
-        );
-
-        return res.status(502).json({
+        return res.status(
+          response.status
+        ).json({
           error: {
-            message:
-              'NVIDIA API returned an invalid response',
+            message,
 
             type:
               'nvidia_api_error',
 
-            code: 502
+            code:
+              response.status
           }
         });
       }
+
+      // ============================================
+      // PROCESS RESPONSE
+      // ============================================
+
+      const data =
+        response.data;
 
       // ============================================
       // STEP 3.7 FLASH
@@ -675,133 +582,86 @@ app.post(
       // ============================================
 
       if (step37) {
+        const choice =
+          data?.choices?.[0];
 
+        if (
+          choice?.message &&
+          typeof choice.message.content ===
+            'string'
+        ) {
+          choice.message.content =
+            cleanStepContent(
+              choice.message.content
+            );
+        }
+
+        if (
+          choice?.message
+        ) {
+          delete choice.message.reasoning;
+
+          delete choice.message.reasoning_content;
+        }
+      }
+
+      // ============================================
+      // OTHER REASONING MODELS
+      // ============================================
+
+      else if (
+        SHOW_REASONING
+      ) {
         const choice =
           data?.choices?.[0];
 
         const message =
           choice?.message;
 
-        if (
-          message &&
-          typeof message.content ===
-            'string'
-        ) {
-
-          message.content =
-            cleanStepContent(
-              message.content
-            );
-        }
-
         if (message) {
+          const reasoning =
+            extractReasoning(
+              message
+            );
 
+          const content =
+            typeof message.content ===
+            'string'
+              ? message.content
+              : '';
+
+          // ==========================================
+          // REASONING AVAILABLE AS SEPARATE FIELD
+          // ==========================================
+
+          if (reasoning) {
+            message.content =
+              `<think>\n${reasoning}\n</think>\n\n${content}`;
+          }
+
+          // Remove raw reasoning fields
           delete message.reasoning;
 
           delete message.reasoning_content;
         }
-
-        console.log(
-          '[NVIDIA Response] Step 3.7 Flash response received'
-        );
-
-        return res
-          .status(200)
-          .json(data);
       }
 
       // ============================================
-      // OTHER MODELS
-      // REASONING PROCESSING
-      // ============================================
-
-      const choice =
-        data?.choices?.[0];
-
-      const message =
-        choice?.message;
-
-      if (
-        message &&
-        typeof message === 'object'
-      ) {
-
-        const reasoning =
-          extractReasoning(
-            message
-          );
-
-        const content =
-          typeof message.content ===
-          'string'
-            ? message.content
-            : '';
-
-        let finalContent =
-          '';
-
-        // ==========================================
-        // REASONING
-        // ==========================================
-
-        if (
-          SHOW_REASONING &&
-          reasoning
-        ) {
-
-          finalContent +=
-            '<think>\n';
-
-          finalContent +=
-            reasoning;
-
-          finalContent +=
-            '\n</think>\n\n';
-        }
-
-        // ==========================================
-        // CONTENT
-        // ==========================================
-
-        if (content) {
-
-          finalContent +=
-            content;
-        }
-
-        // ==========================================
-        // REPLACE CONTENT
-        // ==========================================
-
-        if (finalContent) {
-
-          message.content =
-            finalContent;
-        }
-
-        // ==========================================
-        // REMOVE RAW REASONING
-        // ==========================================
-
-        delete message.reasoning;
-
-        delete message.reasoning_content;
-      }
-
-      // ============================================
-      // SEND FINAL RESPONSE
+      // LOG COMPLETION
       // ============================================
 
       console.log(
-        '[NVIDIA Response] Complete'
+        '[NVIDIA Request] Complete'
       );
 
-      return res
-        .status(200)
-        .json(data);
+      // ============================================
+      // RETURN OPENAI-COMPATIBLE RESPONSE
+      // ============================================
 
+      return res.status(200).json(
+        data
+      );
     } catch (error) {
-
       // ============================================
       // SAFE ERROR HANDLING
       // ============================================
@@ -812,7 +672,6 @@ app.post(
         res.headersSent ||
         res.writableEnded
       ) {
-
         return;
       }
 
@@ -825,19 +684,19 @@ app.post(
           error
         );
 
-      return res
-        .status(status)
-        .json({
-          error: {
-            message,
+      return res.status(
+        status
+      ).json({
+        error: {
+          message,
 
-            type:
-              'invalid_request_error',
+          type:
+            'invalid_request_error',
 
-            code:
-              status
-          }
-        });
+          code:
+            status
+        }
+      });
     }
   }
 );
@@ -849,14 +708,13 @@ app.post(
 app.all(
   '*',
   (req, res) => {
-
     if (
       res.headersSent
     ) {
       return res.end();
     }
 
-    res.status(404).json({
+    return res.status(404).json({
       error: {
         message:
           `Endpoint ${req.path} not found`,
@@ -877,7 +735,6 @@ app.all(
 app.listen(
   PORT,
   () => {
-
     console.log(
       '============================================'
     );
@@ -891,7 +748,7 @@ app.listen(
     );
 
     console.log(
-      `NVIDIA endpoint: ${NIM_CHAT_ENDPOINT}`
+      `NVIDIA endpoint: ${NIM_API_ENDPOINT}`
     );
 
     console.log(
@@ -915,15 +772,15 @@ app.listen(
     );
 
     console.log(
+      'Step 3.7 Flash reasoning: DISABLED'
+    );
+
+    console.log(
       'Streaming: DISABLED'
     );
 
     console.log(
       'Retries: DISABLED'
-    );
-
-    console.log(
-      'Step 3.7 Flash reasoning: DISABLED'
     );
 
     console.log(

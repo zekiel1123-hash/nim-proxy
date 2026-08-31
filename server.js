@@ -76,7 +76,7 @@ const DEFAULT_GEMMA_THINKING =
 // ============================================================
 
 const FALLBACK_MODEL =
-  "deepseek-v4-flash";
+  "gemma-4-31b";
 
 // ============================================================
 // MODEL DEFINITIONS

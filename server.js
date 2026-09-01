@@ -489,33 +489,25 @@ const MODELS = {
   //
   // nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
   //
+  // SPECIAL REQUEST PATH
+  //
   // IMPORTANT:
   //
-  // This model has a deliberately isolated request path.
+  // This model intentionally does NOT receive:
   //
-  // Verified working request:
+  // - reasoning_effort
+  // - chat_template_kwargs
+  // - tools
+  // - tool_choice
+  // - stream_options
   //
-  // baseURL:
-  //   https://nim.api.nvidia.com/v1
+  // The request parameters are intentionally forced to the
+  // known-working NVIDIA configuration:
   //
-  // model:
-  //   nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-  //
-  // temperature:
-  //   0.5
-  //
-  // top_p:
-  //   1
-  //
-  // max_tokens:
-  //   1024
-  //
-  // stream:
-  //   true
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  // No tools.
+  // temperature: 0.5
+  // top_p: 1.0
+  // max_tokens: 1024
+  // stream: true
   // ==========================================================
 
   "deepseek-r1-32b-uncensored": {
@@ -1129,7 +1121,12 @@ function buildNvidiaRequest(
 // ============================================================
 // BUILD COMMUNITY REQUEST
 //
-// INTENTIONALLY SEPARATE FROM STANDARD REQUEST.
+// THIS IS INTENTIONALLY ISOLATED.
+//
+// The community model receives ONLY the parameters from the
+// verified working NVIDIA request.
+//
+// Janitor cannot override the generation parameters here.
 // ============================================================
 
 function buildCommunityRequest(
@@ -1145,22 +1142,13 @@ function buildCommunityRequest(
       body.messages,
 
     temperature:
-      body.temperature !==
-      undefined
-        ? body.temperature
-        : 0.5,
+      0.5,
 
     top_p:
-      body.top_p !==
-      undefined
-        ? body.top_p
-        : 1,
+      1.0,
 
     max_tokens:
-      body.max_tokens !==
-      undefined
-        ? body.max_tokens
-        : 1024,
+      1024,
 
     stream:
       true
@@ -1365,270 +1353,18 @@ function prepareSSE(
 }
 
 // ============================================================
-// COMMUNITY SSE DATA NORMALIZATION
-//
-// NVIDIA community deployments can split SSE messages across
-// HTTP chunks. Therefore HTTP chunks must NOT be treated as
-// complete SSE events.
-//
-// This parser:
-//
-//   1. Buffers incomplete SSE events.
-//   2. Handles CRLF and LF.
-//   3. Handles multiple events in one HTTP chunk.
-//   4. Detects [DONE].
-//   5. Emits exactly one OpenAI SSE event per upstream event.
-//   6. Does not generate a duplicate [DONE].
-// ============================================================
-
-function createCommunitySSEParser(
-  onEvent,
-  onDone
-) {
-
-  let buffer =
-    "";
-
-  let finished =
-    false;
-
-  function finish() {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    finished =
-      true;
-
-    if (
-      typeof onDone ===
-        "function"
-    ) {
-
-      onDone();
-    }
-  }
-
-  function processEvent(
-    eventText
-  ) {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    const lines =
-      eventText.split(
-        /\r?\n/
-      );
-
-    const dataLines =
-      [];
-
-    for (
-      const line of
-      lines
-    ) {
-
-      if (
-        line.startsWith(
-          "data:"
-        )
-      ) {
-
-        dataLines.push(
-          line
-            .slice(5)
-            .trimStart()
-        );
-      }
-    }
-
-    if (
-      dataLines.length ===
-      0
-    ) {
-
-      return;
-    }
-
-    const rawData =
-      dataLines.join(
-        "\n"
-      ).trim();
-
-    if (
-      !rawData
-    ) {
-
-      return;
-    }
-
-    if (
-      rawData ===
-      "[DONE]"
-    ) {
-
-      finish();
-
-      return;
-    }
-
-    let parsed;
-
-    try {
-
-      parsed =
-        JSON.parse(
-          rawData
-        );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[Community SSE Parse Error]",
-        error.message
-      );
-
-      console.error(
-        "[Community Invalid SSE Data]",
-        rawData.slice(
-          0,
-          2000
-        )
-      );
-
-      return;
-    }
-
-    onEvent(
-      parsed
-    );
-  }
-
-  function push(
-    chunk
-  ) {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    buffer +=
-      chunk.toString(
-        "utf8"
-      );
-
-    // SSE events end with a blank line.
-    while (
-      true
-    ) {
-
-      const match =
-        buffer.match(
-          /\r?\n\r?\n/
-        );
-
-      if (
-        !match
-      ) {
-
-        break;
-      }
-
-      const index =
-        match.index;
-
-      const eventText =
-        buffer.slice(
-          0,
-          index
-        );
-
-      buffer =
-        buffer.slice(
-          index +
-          match[0].length
-        );
-
-      processEvent(
-        eventText
-      );
-
-      if (
-        finished
-      ) {
-
-        break;
-      }
-    }
-  }
-
-  function end() {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    // Some upstream implementations may close immediately
-    // after their final event without a trailing blank line.
-    if (
-      buffer.trim()
-    ) {
-
-      processEvent(
-        buffer
-      );
-
-      buffer =
-        "";
-    }
-
-    if (
-      !finished
-    ) {
-
-      finish();
-    }
-  }
-
-  return {
-    push,
-    end,
-    isFinished:
-      () => finished
-  };
-}
-
-// ============================================================
 // COMMUNITY STREAM
 //
-// FIXED:
+// The NVIDIA community endpoint is forwarded as SSE.
 //
-// The old implementation blindly forwarded Node HTTP chunks:
+// We DO NOT reconstruct individual completion chunks.
 //
-//     res.write(chunk)
+// However, unlike the previous version, we explicitly track
+// whether NVIDIA supplied [DONE].
 //
-// That is unsafe because an HTTP chunk is NOT necessarily a
-// complete SSE event.
-//
-// This implementation parses NVIDIA's SSE stream and creates a
-// clean OpenAI-compatible stream for Janitor AI.
+// If NVIDIA closes without [DONE], we still terminate the
+// client SSE stream cleanly so Janitor does not remain waiting
+// forever.
 // ============================================================
 
 async function handleCommunityStream(
@@ -1646,26 +1382,52 @@ async function handleCommunityStream(
     `${COMMUNITY_NIM_API_BASE}/chat/completions`;
 
   console.log(
-    `[Community Request] ${request.model} [STREAMING]`
+    "=================================================="
   );
 
   console.log(
-    `[Community Endpoint] ${endpoint}`
+    "[Community Request]"
   );
 
   console.log(
-    `[Community Config] ` +
-    `temperature=${request.temperature} ` +
-    `top_p=${request.top_p} ` +
-    `max_tokens=${request.max_tokens} ` +
-    `stream=true`
+    `Model: ${request.model}`
   );
 
   console.log(
-    "[Community Request Body]",
+    `Endpoint: ${endpoint}`
+  );
+
+  console.log(
+    "Forced configuration:"
+  );
+
+  console.log(
+    "  temperature=0.5"
+  );
+
+  console.log(
+    "  top_p=1.0"
+  );
+
+  console.log(
+    "  max_tokens=1024"
+  );
+
+  console.log(
+    "  stream=true"
+  );
+
+  console.log(
+    "[Community Outgoing Body]",
     JSON.stringify(
-      request
+      request,
+      null,
+      2
     )
+  );
+
+  console.log(
+    "=================================================="
   );
 
   let upstream;
@@ -1693,7 +1455,7 @@ async function handleCommunityStream(
   }
 
   // ==========================================================
-  // UPSTREAM HTTP ERROR
+  // HTTP ERROR
   // ==========================================================
 
   if (
@@ -1727,10 +1489,6 @@ async function handleCommunityStream(
         parsed
       );
 
-    console.error(
-      `[Community HTTP ${upstream.status}] ${message}`
-    );
-
     const error =
       new Error(
         message
@@ -1739,11 +1497,15 @@ async function handleCommunityStream(
     error.status =
       upstream.status;
 
+    console.error(
+      `[Community HTTP ${upstream.status}] ${message}`
+    );
+
     throw error;
   }
 
   // ==========================================================
-  // START CLIENT STREAM
+  // PREPARE CLIENT SSE
   // ==========================================================
 
   prepareSSE(
@@ -1756,75 +1518,35 @@ async function handleCommunityStream(
   let upstreamFinished =
     false;
 
-  function sendCommunityEvent(
-    data
-  ) {
+  let receivedDone =
+    false;
 
-    if (
-      clientClosed ||
-      res.writableEnded ||
-      upstreamFinished
-    ) {
+  let receivedContent =
+    false;
 
-      return;
-    }
+  let receivedAnyChunk =
+    false;
 
-    try {
+  // ==========================================================
+  // CLIENT CLOSE
+  // ==========================================================
 
-      // ------------------------------------------------------
-      // Make sure the stream remains OpenAI compatible.
-      // ------------------------------------------------------
+  const onClientClose =
+    () => {
 
       if (
-        data &&
-        Array.isArray(
-          data.choices
-        )
+        res.writableEnded
       ) {
 
-        for (
-          const choice of
-          data.choices
-        ) {
-
-          if (
-            !choice ||
-            !choice.delta
-          ) {
-
-            continue;
-          }
-
-          // Do NOT strip reasoning_content here.
-          //
-          // The community model is a reasoning model and the
-          // proxy should preserve what NVIDIA sends.
-          //
-          // Janitor can receive it as an OpenAI-compatible
-          // delta field.
-        }
+        return;
       }
-
-      const serialized =
-        JSON.stringify(
-          data
-        );
-
-      res.write(
-        `data: ${serialized}\n\n`
-      );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[Community SSE Write Error]",
-        error.message
-      );
 
       clientClosed =
         true;
+
+      console.log(
+        "[Community Stream] Client disconnected."
+      );
 
       if (
         upstream?.data &&
@@ -1833,10 +1555,18 @@ async function handleCommunityStream(
 
         upstream.data.destroy();
       }
-    }
-  }
+    };
 
-  function finishCommunityStream() {
+  req.once(
+    "close",
+    onClientClose
+  );
+
+  // ==========================================================
+  // FINISH
+  // ==========================================================
+
+  function finish() {
 
     if (
       upstreamFinished
@@ -1858,12 +1588,22 @@ async function handleCommunityStream(
 
     try {
 
-      // IMPORTANT:
-      //
-      // This is the ONLY place where this proxy emits [DONE].
-      //
-      // The parser consumes NVIDIA's [DONE] instead of
-      // forwarding it, preventing duplicate terminators.
+      if (
+        !receivedDone
+      ) {
+
+        console.log(
+          "[Community Stream] " +
+          "NVIDIA closed without [DONE]."
+        );
+      }
+
+      console.log(
+        "[Community Stream] " +
+        `Finished. chunks=${receivedAnyChunk ? "yes" : "no"} ` +
+        `content=${receivedContent ? "yes" : "no"} ` +
+        `done=${receivedDone ? "yes" : "no"}`
+      );
 
       res.write(
         "data: [DONE]\n\n"
@@ -1874,129 +1614,20 @@ async function handleCommunityStream(
     ) {
 
       console.error(
-        "[Community DONE Write Error]",
+        "[Community Final SSE Error]",
         error.message
       );
-    }
 
-    if (
-      !res.writableEnded
-    ) {
+    } finally {
 
-      res.end();
+      if (
+        !res.writableEnded
+      ) {
+
+        res.end();
+      }
     }
   }
-
-  const parser =
-    createCommunitySSEParser(
-      sendCommunityEvent,
-      finishCommunityStream
-    );
-
-  // ==========================================================
-  // CLIENT DISCONNECT
-  // ==========================================================
-
-  req.once(
-    "close",
-    () => {
-
-      if (
-        upstreamFinished
-      ) {
-
-        return;
-      }
-
-      clientClosed =
-        true;
-
-      console.log(
-        "[Community Client] Client disconnected."
-      );
-
-      if (
-        upstream?.data &&
-        !upstream.data.destroyed
-      ) {
-
-        upstream.data.destroy();
-      }
-    }
-  );
-
-  // ==========================================================
-  // UPSTREAM DATA
-  // ==========================================================
-
-  upstream.data.on(
-    "data",
-    chunk => {
-
-      if (
-        clientClosed ||
-        upstreamFinished
-      ) {
-
-        return;
-      }
-
-      console.log(
-        `[Community Stream Chunk] ${chunk.length} bytes`
-      );
-
-      // Debug output.
-      //
-      // This lets you verify that NVIDIA is actually sending
-      // data without forwarding raw HTTP chunks to Janitor.
-
-      try {
-
-        console.log(
-          "[Community Stream Data]",
-          chunk
-            .toString(
-              "utf8"
-            )
-            .slice(
-              0,
-              4000
-            )
-        );
-
-      } catch {
-        // Ignore logging failures.
-      }
-
-      parser.push(
-        chunk
-      );
-    }
-  );
-
-  // ==========================================================
-  // UPSTREAM END
-  // ==========================================================
-
-  upstream.data.on(
-    "end",
-    () => {
-
-      if (
-        clientClosed ||
-        upstreamFinished
-      ) {
-
-        return;
-      }
-
-      console.log(
-        "[Community Stream] NVIDIA upstream ended."
-      );
-
-      parser.end();
-    }
-  );
 
   // ==========================================================
   // UPSTREAM ERROR
@@ -2021,9 +1652,6 @@ async function handleCommunityStream(
         error.message
       );
 
-      upstreamFinished =
-        true;
-
       try {
 
         res.write(
@@ -2046,12 +1674,121 @@ async function handleCommunityStream(
         // Client disconnected.
       }
 
+      finish();
+    }
+  );
+
+  // ==========================================================
+  // UPSTREAM DATA
+  // ==========================================================
+
+  upstream.data.on(
+    "data",
+    chunk => {
+
       if (
-        !res.writableEnded
+        clientClosed ||
+        upstreamFinished ||
+        res.writableEnded
       ) {
 
-        res.end();
+        return;
       }
+
+      receivedAnyChunk =
+        true;
+
+      const text =
+        chunk.toString(
+          "utf8"
+        );
+
+      console.log(
+        `[Community Stream Chunk] ${Buffer.byteLength(text, "utf8")} bytes`
+      );
+
+      console.log(
+        "[Community Stream Data]",
+        text
+      );
+
+      // ------------------------------------------------------
+      // Detect actual completion content.
+      //
+      // We don't modify the chunk. This keeps the NVIDIA
+      // OpenAI-compatible SSE response intact.
+      // ------------------------------------------------------
+
+      if (
+        /"content"\s*:\s*"[^"]+"/.test(
+          text
+        )
+      ) {
+
+        receivedContent =
+          true;
+      }
+
+      if (
+        text.includes(
+          "data: [DONE]"
+        )
+      ) {
+
+        receivedDone =
+          true;
+      }
+
+      try {
+
+        res.write(
+          chunk
+        );
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "[Community Client Write Error]",
+          error.message
+        );
+
+        clientClosed =
+          true;
+
+        if (
+          upstream?.data &&
+          !upstream.data.destroyed
+        ) {
+
+          upstream.data.destroy();
+        }
+      }
+    }
+  );
+
+  // ==========================================================
+  // UPSTREAM END
+  // ==========================================================
+
+  upstream.data.on(
+    "end",
+    () => {
+
+      if (
+        clientClosed ||
+        upstreamFinished
+      ) {
+
+        return;
+      }
+
+      console.log(
+        "[Community Stream] NVIDIA upstream ended."
+      );
+
+      finish();
     }
   );
 }
@@ -2571,6 +2308,14 @@ app.post(
     }
 
     // ========================================================
+    // LOG INCOMING REQUEST FOR COMMUNITY DEBUGGING
+    // ========================================================
+
+    console.log(
+      `[Incoming Request] model=${body.model} stream=${body.stream}`
+    );
+
+    // ========================================================
     // MODEL
     // ========================================================
 
@@ -2653,27 +2398,6 @@ app.post(
         );
 
         // ----------------------------------------------------
-        // IMPORTANT:
-        //
-        // If the community stream already sent headers/data,
-        // do NOT attempt to start another HTTP response.
-        // ----------------------------------------------------
-
-        if (
-          res.headersSent
-        ) {
-
-          if (
-            !res.writableEnded
-          ) {
-
-            res.end();
-          }
-
-          return;
-        }
-
-        // ----------------------------------------------------
         // FALLBACK
         // ----------------------------------------------------
 
@@ -2740,18 +2464,24 @@ app.post(
           }
         }
 
-        return sendOpenAIError(
+        if (
+          !res.headersSent
+        ) {
 
-          res,
+          return sendOpenAIError(
 
-          error.status ||
+            res,
+
             502,
 
-          error.message ||
-            "Community model request failed.",
+            error.message ||
+              "Community model request failed.",
 
-          "community_model_error"
-        );
+            "community_model_error"
+          );
+        }
+
+        return;
       }
     }
 

@@ -2,7 +2,7 @@
 // NVIDIA NIM -> OpenAI-Compatible Streaming Proxy
 // ============================================================
 //
-// HOSTED NIM MODELS
+// CURRENT MODELS
 //
 // kimi-k3
 //   -> moonshotai/kimi-k3
@@ -22,17 +22,10 @@
 // gemma-4-31b
 //   -> google/gemma-4-31b-it
 //
-// COMMUNITY / DEPLOYMENT MODEL
-//
-// deepseek-r1-32b-uncensored
-//   -> nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-//   -> https://nim.api.nvidia.com/v1
-//
 // FALLBACK
 //
 // deepseek-v4-flash
 //
-// STREAMING ONLY
 // ============================================================
 
 const express = require("express");
@@ -41,28 +34,12 @@ const axios = require("axios");
 
 const app = express();
 
-const PORT =
-  process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-// ============================================================
-// NVIDIA API ENDPOINTS
-// ============================================================
-
-// Standard NVIDIA hosted NIM endpoint.
 const NIM_API_BASE =
   process.env.NIM_API_BASE ||
   "https://integrate.api.nvidia.com/v1";
 
-// Community / Deployment endpoint.
-//
-// This is intentionally separate from NIM_API_BASE because
-// nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored is being
-// accessed through nim.api.nvidia.com.
-const COMMUNITY_NIM_API_BASE =
-  process.env.COMMUNITY_NIM_API_BASE ||
-  "https://nim.api.nvidia.com/v1";
-
-// NVIDIA API key.
 const NIM_API_KEY =
   process.env.NIM_API_KEY;
 
@@ -76,27 +53,22 @@ const SHOW_REASONING =
   ).toLowerCase() === "true";
 
 const DEFAULT_KIMI_REASONING =
-  process.env.KIMI_REASONING_EFFORT ||
-  "high";
+  process.env.KIMI_REASONING_EFFORT || "high";
 
 const DEFAULT_DEEPSEEK_REASONING =
-  process.env.DEEPSEEK_REASONING_EFFORT ||
-  "high";
+  process.env.DEEPSEEK_REASONING_EFFORT || "high";
 
 const DEFAULT_MUSE_REASONING =
-  process.env.MUSE_REASONING_EFFORT ||
-  "high";
+  process.env.MUSE_REASONING_EFFORT || "high";
 
 const DEFAULT_NEMOTRON_THINKING =
   String(
-    process.env.NEMOTRON_ENABLE_THINKING ||
-      "true"
+    process.env.NEMOTRON_ENABLE_THINKING || "true"
   ).toLowerCase() === "true";
 
 const DEFAULT_GEMMA_THINKING =
   String(
-    process.env.GEMMA_ENABLE_THINKING ||
-      "true"
+    process.env.GEMMA_ENABLE_THINKING || "true"
   ).toLowerCase() === "true";
 
 // ============================================================
@@ -104,7 +76,7 @@ const DEFAULT_GEMMA_THINKING =
 // ============================================================
 
 const FALLBACK_MODEL =
-  "deepseek-v4-flash";
+  "gemma-4-31b";
 
 // ============================================================
 // MODEL DEFINITIONS
@@ -124,9 +96,6 @@ const MODELS = {
     upstream:
       "moonshotai/kimi-k3",
 
-    apiBase:
-      NIM_API_BASE,
-
     owner:
       "moonshotai",
 
@@ -143,7 +112,6 @@ const MODELS = {
       1.0,
 
     reasoning: {
-
       type:
         "reasoning_effort",
 
@@ -158,7 +126,6 @@ const MODELS = {
     },
 
     supports: {
-
       top_p:
         false,
 
@@ -183,7 +150,7 @@ const MODELS = {
   },
 
   // ==========================================================
-  // DEEPSEEK V4 PRO
+  // DEEPSEEK V4 PRO 0813
   // ==========================================================
 
   "deepseek-v4-pro": {
@@ -194,9 +161,6 @@ const MODELS = {
     upstream:
       "deepseek-ai/deepseek-v4-pro-0813",
 
-    apiBase:
-      NIM_API_BASE,
-
     owner:
       "deepseek-ai",
 
@@ -216,7 +180,6 @@ const MODELS = {
       0.95,
 
     reasoning: {
-
       type:
         "reasoning_effort",
 
@@ -231,7 +194,6 @@ const MODELS = {
     },
 
     supports: {
-
       top_p:
         true,
 
@@ -256,7 +218,7 @@ const MODELS = {
   },
 
   // ==========================================================
-  // DEEPSEEK V4 FLASH
+  // DEEPSEEK V4 FLASH 0731
   // ==========================================================
 
   "deepseek-v4-flash": {
@@ -266,9 +228,6 @@ const MODELS = {
 
     upstream:
       "deepseek-ai/deepseek-v4-flash-0731",
-
-    apiBase:
-      NIM_API_BASE,
 
     owner:
       "deepseek-ai",
@@ -289,7 +248,6 @@ const MODELS = {
       0.95,
 
     reasoning: {
-
       type:
         "reasoning_effort",
 
@@ -304,7 +262,6 @@ const MODELS = {
     },
 
     supports: {
-
       top_p:
         true,
 
@@ -340,9 +297,6 @@ const MODELS = {
     upstream:
       "meta/muse-glimmer-30b",
 
-    apiBase:
-      NIM_API_BASE,
-
     owner:
       "meta",
 
@@ -362,7 +316,6 @@ const MODELS = {
       1.0,
 
     reasoning: {
-
       type:
         "reasoning_effort",
 
@@ -380,7 +333,6 @@ const MODELS = {
     },
 
     supports: {
-
       top_p:
         true,
 
@@ -416,9 +368,6 @@ const MODELS = {
     upstream:
       "nvidia/nemotron-3-ultra-550b-a55b",
 
-    apiBase:
-      NIM_API_BASE,
-
     owner:
       "nvidia",
 
@@ -438,7 +387,6 @@ const MODELS = {
       0.95,
 
     reasoning: {
-
       type:
         "chat_template_thinking",
 
@@ -447,7 +395,6 @@ const MODELS = {
     },
 
     supports: {
-
       top_p:
         true,
 
@@ -474,6 +421,28 @@ const MODELS = {
   // ==========================================================
   // GEMMA 4 31B IT
   // ==========================================================
+  //
+  // NVIDIA model:
+  //
+  // google/gemma-4-31b-it
+  //
+  // Context: 262K
+  // Input: Text, Image, Video
+  // Output: Text
+  //
+  // NVIDIA's current API example uses:
+  //
+  // chat_template_kwargs:
+  // {
+  //   enable_thinking: true
+  // }
+  //
+  // max_tokens: 16384
+  // temperature: 1
+  // top_p: 0.95
+  //
+  // No reasoning_effort is sent.
+  // ==========================================================
 
   "gemma-4-31b": {
 
@@ -482,9 +451,6 @@ const MODELS = {
 
     upstream:
       "google/gemma-4-31b-it",
-
-    apiBase:
-      NIM_API_BASE,
 
     owner:
       "google",
@@ -505,7 +471,6 @@ const MODELS = {
       0.95,
 
     reasoning: {
-
       type:
         "chat_template_thinking",
 
@@ -514,7 +479,6 @@ const MODELS = {
     },
 
     supports: {
-
       top_p:
         true,
 
@@ -529,93 +493,6 @@ const MODELS = {
 
       tools:
         true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
-    }
-  },
-
-  // ==========================================================
-  // COMMUNITY / DEPLOYMENT
-  //
-  // DeepSeek-R1-Distill-Qwen-32B-Uncensored
-  //
-  // Exact model ID supplied by NVIDIA's API example:
-  //
-  // nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-  //
-  // Endpoint:
-  //
-  // https://nim.api.nvidia.com/v1
-  //
-  // This model does NOT receive reasoning_effort or
-  // chat_template_kwargs from this proxy.
-  //
-  // The supplied NVIDIA example uses:
-  //
-  // temperature: 0.5
-  // top_p: 1
-  // max_tokens: 1024
-  // stream: true
-  // ==========================================================
-
-  "deepseek-r1-32b-uncensored": {
-
-    id:
-      "deepseek-r1-32b-uncensored",
-
-    upstream:
-      "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored",
-
-    apiBase:
-      COMMUNITY_NIM_API_BASE,
-
-    owner:
-      "nicoboss",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      131072,
-
-    maxTokens:
-      32768,
-
-    temperature:
-      0.5,
-
-    top_p:
-      1.0,
-
-    reasoning: {
-
-      type:
-        "native_reasoning",
-
-      default:
-        true
-    },
-
-    supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        false,
 
       stream_options:
         false,
@@ -627,18 +504,40 @@ const MODELS = {
 };
 
 // ============================================================
+// EXPRESS MIDDLEWARE
+// ============================================================
+
+app.use(
+  cors()
+);
+
+app.use(
+  express.json({
+    limit:
+      "100mb"
+  })
+);
+
+app.use(
+  express.urlencoded({
+    limit:
+      "100mb",
+
+    extended:
+      true
+  })
+);
+
+// ============================================================
 // HELPERS
 // ============================================================
 
-function getModel(
-  modelName
-) {
+function getModel(modelName) {
 
   if (
     modelName &&
     MODELS[modelName]
   ) {
-
     return MODELS[modelName];
   }
 
@@ -649,14 +548,11 @@ function getModel(
 // THINK TAG CLEANUP
 // ============================================================
 
-function stripThinkTags(
-  text
-) {
+function stripThinkTags(text) {
 
   if (
     typeof text !== "string"
   ) {
-
     return text;
   }
 
@@ -674,14 +570,11 @@ function stripThinkTags(
 // MEDIA DETECTION
 // ============================================================
 
-function containsMedia(
-  messages
-) {
+function containsMedia(messages) {
 
   if (
     !Array.isArray(messages)
   ) {
-
     return false;
   }
 
@@ -694,7 +587,6 @@ function containsMedia(
         message?.content
       )
     ) {
-
       continue;
     }
 
@@ -703,12 +595,9 @@ function containsMedia(
     ) {
 
       if (
-        part?.type ===
-          "image_url" ||
-        part?.type ===
-          "video_url"
+        part?.type === "image_url" ||
+        part?.type === "video_url"
       ) {
-
         return true;
       }
     }
@@ -721,21 +610,17 @@ function containsMedia(
 // MESSAGE VALIDATION
 // ============================================================
 
-function validateMessages(
-  messages
-) {
+function validateMessages(messages) {
 
   if (
     !Array.isArray(messages)
   ) {
-
     return "messages must be an array";
   }
 
   if (
     messages.length === 0
   ) {
-
     return "messages cannot be empty";
   }
 
@@ -750,32 +635,25 @@ function validateMessages(
 
     if (
       !message ||
-      typeof message !==
-        "object"
+      typeof message !== "object"
     ) {
-
       return (
         `messages[${i}] must be an object`
       );
     }
 
     if (
-      typeof message.role !==
-      "string"
+      typeof message.role !== "string"
     ) {
-
       return (
         `messages[${i}].role must be a string`
       );
     }
 
     if (
-      message.content ===
-        undefined &&
-      message.tool_calls ===
-        undefined
+      message.content === undefined &&
+      message.tool_calls === undefined
     ) {
-
       return (
         `messages[${i}] must contain content or tool_calls`
       );
@@ -786,7 +664,7 @@ function validateMessages(
 }
 
 // ============================================================
-// REASONING EFFORT
+// REASONING VALIDATION
 // ============================================================
 
 function getReasoningEffort(
@@ -798,7 +676,6 @@ function getReasoningEffort(
     model.reasoning.type !==
     "reasoning_effort"
   ) {
-
     return null;
   }
 
@@ -811,7 +688,6 @@ function getReasoningEffort(
       requested
     )
   ) {
-
     return requested;
   }
 
@@ -849,8 +725,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    body.temperature !==
-    undefined
+    body.temperature !== undefined
   ) {
 
     request.temperature =
@@ -871,16 +746,14 @@ function buildNvidiaRequest(
   ) {
 
     if (
-      body.top_p !==
-      undefined
+      body.top_p !== undefined
     ) {
 
       request.top_p =
         body.top_p;
 
     } else if (
-      model.top_p !==
-      undefined
+      model.top_p !== undefined
     ) {
 
       request.top_p =
@@ -896,27 +769,12 @@ function buildNvidiaRequest(
     body.max_tokens;
 
   if (
-    maxTokens ===
-      undefined ||
-    maxTokens ===
-      null
+    maxTokens === undefined ||
+    maxTokens === null
   ) {
 
-    // The community model's supplied NVIDIA
-    // example defaults to 1024.
-    if (
-      model.id ===
-      "deepseek-r1-32b-uncensored"
-    ) {
-
-      maxTokens =
-        1024;
-
-    } else {
-
-      maxTokens =
-        16384;
-    }
+    maxTokens =
+      16384;
   }
 
   maxTokens =
@@ -929,10 +787,7 @@ function buildNvidiaRequest(
   ) {
 
     maxTokens =
-      model.id ===
-      "deepseek-r1-32b-uncensored"
-        ? 1024
-        : 16384;
+      16384;
   }
 
   maxTokens =
@@ -944,8 +799,7 @@ function buildNvidiaRequest(
     maxTokens < 1
   ) {
 
-    maxTokens =
-      1;
+    maxTokens = 1;
   }
 
   if (
@@ -966,8 +820,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.seed &&
-    body.seed !==
-      undefined
+    body.seed !== undefined
   ) {
 
     request.seed =
@@ -980,8 +833,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.stop &&
-    body.stop !==
-      undefined
+    body.stop !== undefined
   ) {
 
     request.stop =
@@ -994,8 +846,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.tools &&
-    body.tools !==
-      undefined
+    body.tools !== undefined
   ) {
 
     request.tools =
@@ -1004,8 +855,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.tools &&
-    body.tool_choice !==
-      undefined
+    body.tool_choice !== undefined
   ) {
 
     request.tool_choice =
@@ -1018,8 +868,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.stream_options &&
-    body.stream_options !==
-      undefined
+    body.stream_options !== undefined
   ) {
 
     request.stream_options =
@@ -1032,8 +881,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.presence_penalty &&
-    body.presence_penalty !==
-      undefined
+    body.presence_penalty !== undefined
   ) {
 
     request.presence_penalty =
@@ -1046,8 +894,7 @@ function buildNvidiaRequest(
 
   if (
     model.supports.frequency_penalty &&
-    body.frequency_penalty !==
-      undefined
+    body.frequency_penalty !== undefined
   ) {
 
     request.frequency_penalty =
@@ -1063,8 +910,7 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   if (
-    model.id ===
-    "kimi-k3"
+    model.id === "kimi-k3"
   ) {
 
     request.reasoning_effort =
@@ -1075,14 +921,12 @@ function buildNvidiaRequest(
   }
 
   // ----------------------------------------------------------
-  // DEEPSEEK V4
+  // DEEPSEEK V4 PRO / FLASH
   // ----------------------------------------------------------
 
   else if (
-    model.id ===
-      "deepseek-v4-pro" ||
-    model.id ===
-      "deepseek-v4-flash"
+    model.id === "deepseek-v4-pro" ||
+    model.id === "deepseek-v4-flash"
   ) {
 
     request.reasoning_effort =
@@ -1107,8 +951,7 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   else if (
-    model.id ===
-    "muse-glimmer-30b"
+    model.id === "muse-glimmer-30b"
   ) {
 
     request.reasoning_effort =
@@ -1133,14 +976,12 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   else if (
-    model.id ===
-    "nemotron-3-ultra"
+    model.id === "nemotron-3-ultra"
   ) {
 
     request.chat_template_kwargs = {
 
-      ...(body.chat_template_kwargs ||
-        {}),
+      ...(body.chat_template_kwargs || {}),
 
       enable_thinking:
         body.chat_template_kwargs
@@ -1150,18 +991,25 @@ function buildNvidiaRequest(
   }
 
   // ----------------------------------------------------------
-  // GEMMA 4
+  // GEMMA 4 31B IT
+  // ----------------------------------------------------------
+  //
+  // NVIDIA's current Gemma 4 API example:
+  //
+  // "chat_template_kwargs": {
+  //   "enable_thinking": true
+  // }
+  //
+  // Do not send reasoning_effort.
   // ----------------------------------------------------------
 
   else if (
-    model.id ===
-    "gemma-4-31b"
+    model.id === "gemma-4-31b"
   ) {
 
     request.chat_template_kwargs = {
 
-      ...(body.chat_template_kwargs ||
-        {}),
+      ...(body.chat_template_kwargs || {}),
 
       enable_thinking:
         body.chat_template_kwargs
@@ -1170,44 +1018,11 @@ function buildNvidiaRequest(
     };
   }
 
-  // ----------------------------------------------------------
-  // COMMUNITY DEEPSEEK R1 DISTILL
-  // ----------------------------------------------------------
-  //
-  // IMPORTANT:
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  //
-  // The supplied NVIDIA example is:
-  //
-  // model
-  // messages
-  // temperature: 0.5
-  // top_p: 1
-  // max_tokens: 1024
-  // stream: true
-  //
-  // The request above already produces exactly that
-  // structure when defaults are used.
-  // ----------------------------------------------------------
-
-  else if (
-    model.id ===
-    "deepseek-r1-32b-uncensored"
-  ) {
-
-    // Intentionally do nothing.
-    //
-    // Native R1 reasoning is emitted by the model.
-    // Do not send unsupported reasoning controls.
-  }
-
   return request;
 }
 
 // ============================================================
-// NORMALIZE STREAM CHUNK
+// REASONING NORMALIZATION
 // ============================================================
 
 function normalizeChunk(
@@ -1216,10 +1031,8 @@ function normalizeChunk(
 
   if (
     !data ||
-    typeof data !==
-      "object"
+    typeof data !== "object"
   ) {
-
     return data;
   }
 
@@ -1230,8 +1043,7 @@ function normalizeChunk(
   ) {
 
     for (
-      const choice of
-      data.choices
+      const choice of data.choices
     ) {
 
       const delta =
@@ -1240,7 +1052,6 @@ function normalizeChunk(
       if (
         !delta
       ) {
-
         continue;
       }
 
@@ -1270,7 +1081,7 @@ function normalizeChunk(
 }
 
 // ============================================================
-// ERROR EXTRACTION
+// SAFE ERROR MESSAGE
 // ============================================================
 
 function extractErrorMessage(
@@ -1320,21 +1131,19 @@ function extractErrorMessage(
 }
 
 // ============================================================
-// OPENAI ERROR
+// OPENAI ERROR RESPONSE
 // ============================================================
 
 function sendOpenAIError(
   res,
   status,
   message,
-  code =
-    "nvidia_api_error"
+  code = "nvidia_api_error"
 ) {
 
   if (
     res.headersSent
   ) {
-
     return;
   }
 
@@ -1370,11 +1179,8 @@ app.get(
       streaming:
         true,
 
-      hosted_api_base:
+      api_base:
         NIM_API_BASE,
-
-      community_api_base:
-        COMMUNITY_NIM_API_BASE,
 
       fallback_model:
         FALLBACK_MODEL,
@@ -1393,9 +1199,6 @@ app.get(
 
             upstream:
               model.upstream,
-
-            api_base:
-              model.apiBase,
 
             multimodal:
               model.multimodal,
@@ -1457,10 +1260,7 @@ app.get(
 
 app.post(
   "/v1/chat/completions",
-  async (
-    req,
-    res
-  ) => {
+  async (req, res) => {
 
     const body =
       req.body || {};
@@ -1474,9 +1274,7 @@ app.post(
     ) {
 
       return sendOpenAIError(
-
         res,
-
         400,
 
         "This proxy supports streaming chat completions only. Set stream=true.",
@@ -1499,9 +1297,7 @@ app.post(
     ) {
 
       return sendOpenAIError(
-
         res,
-
         400,
 
         validationError,
@@ -1531,15 +1327,12 @@ app.post(
     ) {
 
       console.warn(
-
         `[Fallback] Unknown model "${requestedModel}". ` +
         `Using "${FALLBACK_MODEL}".`
       );
 
       selectedModel =
-        MODELS[
-          FALLBACK_MODEL
-        ];
+        MODELS[FALLBACK_MODEL];
     }
 
     // ========================================================
@@ -1554,9 +1347,7 @@ app.post(
     ) {
 
       return sendOpenAIError(
-
         res,
-
         400,
 
         `"${selectedModel.id}" does not support image/video input.`,
@@ -1566,7 +1357,7 @@ app.post(
     }
 
     // ========================================================
-    // BUILD REQUEST
+    // BUILD NVIDIA REQUEST
     // ========================================================
 
     const primaryRequest =
@@ -1582,15 +1373,11 @@ app.post(
     );
 
     console.log(
-      `[Endpoint] ${selectedModel.apiBase}`
-    );
-
-    console.log(
       `[Request Config] ` +
       `temperature=${primaryRequest.temperature} ` +
       `top_p=${primaryRequest.top_p ?? "default"} ` +
       `max_tokens=${primaryRequest.max_tokens} ` +
-      `reasoning_effort=${primaryRequest.reasoning_effort ?? "not_sent"}`
+      `reasoning_effort=${primaryRequest.reasoning_effort ?? "template"}`
     );
 
     // ========================================================
@@ -1604,7 +1391,7 @@ app.post(
       upstreamResponse =
         await axios.post(
 
-          `${selectedModel.apiBase}/chat/completions`,
+          `${NIM_API_BASE}/chat/completions`,
 
           primaryRequest,
 
@@ -1633,9 +1420,7 @@ app.post(
           }
         );
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
 
       console.error(
         "[NVIDIA Connection Error]",
@@ -1652,7 +1437,6 @@ app.post(
       ) {
 
         console.warn(
-
           `[Fallback] ${selectedModel.id} connection failed. ` +
           `Retrying with ${FALLBACK_MODEL}.`
         );
@@ -1660,9 +1444,7 @@ app.post(
         try {
 
           const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+            MODELS[FALLBACK_MODEL];
 
           const fallbackRequest =
             buildNvidiaRequest(
@@ -1680,7 +1462,7 @@ app.post(
           upstreamResponse =
             await axios.post(
 
-              `${fallbackModel.apiBase}/chat/completions`,
+              `${NIM_API_BASE}/chat/completions`,
 
               fallbackRequest,
 
@@ -1717,15 +1499,12 @@ app.post(
         ) {
 
           console.error(
-
             "[Fallback Connection Error]",
             fallbackError.message
           );
 
           return sendOpenAIError(
-
             res,
-
             502,
 
             fallbackError.message,
@@ -1737,9 +1516,7 @@ app.post(
       } else {
 
         return sendOpenAIError(
-
           res,
-
           502,
 
           error.message,
@@ -1750,14 +1527,12 @@ app.post(
     }
 
     // ========================================================
-    // UPSTREAM HTTP ERROR
+    // UPSTREAM HTTP ERROR BEFORE STREAM
     // ========================================================
 
     if (
-      upstreamResponse.status <
-        200 ||
-      upstreamResponse.status >=
-        300
+      upstreamResponse.status < 200 ||
+      upstreamResponse.status >= 300
     ) {
 
       let errorText =
@@ -1779,7 +1554,6 @@ app.post(
             errorText.length >
             100000
           ) {
-
             break;
           }
         }
@@ -1799,7 +1573,7 @@ app.post(
           );
 
       } catch {
-        // Keep raw text.
+        // Keep string.
       }
 
       const upstreamMessage =
@@ -1808,7 +1582,6 @@ app.post(
         );
 
       console.error(
-
         `[NVIDIA HTTP ${upstreamResponse.status}] ` +
         `${selectedModel.upstream}: ` +
         upstreamMessage
@@ -1824,7 +1597,6 @@ app.post(
       ) {
 
         console.warn(
-
           `[Fallback] ${selectedModel.id} returned HTTP ` +
           `${upstreamResponse.status}. ` +
           `Retrying with ${FALLBACK_MODEL}.`
@@ -1833,9 +1605,7 @@ app.post(
         try {
 
           const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+            MODELS[FALLBACK_MODEL];
 
           const fallbackRequest =
             buildNvidiaRequest(
@@ -1853,7 +1623,7 @@ app.post(
           const fallbackResponse =
             await axios.post(
 
-              `${fallbackModel.apiBase}/chat/completions`,
+              `${NIM_API_BASE}/chat/completions`,
 
               fallbackRequest,
 
@@ -1883,10 +1653,8 @@ app.post(
             );
 
           if (
-            fallbackResponse.status <
-              200 ||
-            fallbackResponse.status >=
-              300
+            fallbackResponse.status < 200 ||
+            fallbackResponse.status >= 300
           ) {
 
             let fallbackText =
@@ -1908,7 +1676,6 @@ app.post(
                   fallbackText.length >
                   100000
                 ) {
-
                   break;
                 }
               }
@@ -1928,7 +1695,7 @@ app.post(
                 );
 
             } catch {
-              // Keep raw text.
+              // Keep string.
             }
 
             const fallbackMessage =
@@ -1937,15 +1704,12 @@ app.post(
               );
 
             console.error(
-
               `[Fallback HTTP ${fallbackResponse.status}] ` +
               fallbackMessage
             );
 
             return sendOpenAIError(
-
               res,
-
               fallbackResponse.status,
 
               fallbackMessage,
@@ -1958,10 +1722,9 @@ app.post(
             fallbackResponse;
 
           selectedModel =
-            fallbackModel;
+            MODELS[FALLBACK_MODEL];
 
           console.log(
-
             `[Fallback] Now streaming from ` +
             `${selectedModel.upstream}`
           );
@@ -1976,9 +1739,7 @@ app.post(
           );
 
           return sendOpenAIError(
-
             res,
-
             502,
 
             fallbackError.message,
@@ -1990,7 +1751,6 @@ app.post(
       } else {
 
         return sendOpenAIError(
-
           res,
 
           upstreamResponse.status,
@@ -2050,7 +1810,6 @@ app.post(
         finished ||
         res.writableEnded
       ) {
-
         return;
       }
 
@@ -2080,7 +1839,6 @@ app.post(
       if (
         finished
       ) {
-
         return;
       }
 
@@ -2127,14 +1885,12 @@ app.post(
       if (
         !line.trim()
       ) {
-
         return;
       }
 
       if (
         line.startsWith(":")
       ) {
-
         return;
       }
 
@@ -2143,7 +1899,6 @@ app.post(
           "data:"
         )
       ) {
-
         return;
       }
 
@@ -2153,8 +1908,7 @@ app.post(
           .trim();
 
       if (
-        raw ===
-        "[DONE]"
+        raw === "[DONE]"
       ) {
 
         finishStream();
@@ -2176,7 +1930,6 @@ app.post(
       ) {
 
         console.error(
-
           "[SSE JSON Parse Error]",
           error.message,
 
@@ -2193,10 +1946,43 @@ app.post(
       // NORMALIZE RESPONSE
       // ======================================================
 
-      parsed =
-        normalizeChunk(
-          parsed
-        );
+      if (
+        Array.isArray(
+          parsed.choices
+        )
+      ) {
+
+        for (
+          const choice of
+          parsed.choices
+        ) {
+
+          if (
+            choice?.delta
+          ) {
+
+            if (
+              typeof choice.delta.content ===
+              "string"
+            ) {
+
+              choice.delta.content =
+                stripThinkTags(
+                  choice.delta.content
+                );
+            }
+
+            if (
+              !SHOW_REASONING
+            ) {
+
+              delete choice.delta.reasoning;
+
+              delete choice.delta.reasoning_content;
+            }
+          }
+        }
+      }
 
       // ======================================================
       // SEND TO CLIENT
@@ -2219,7 +2005,6 @@ app.post(
           finished ||
           res.writableEnded
         ) {
-
           return;
         }
 
@@ -2234,8 +2019,7 @@ app.post(
           );
 
         buffer =
-          lines.pop() ||
-          "";
+          lines.pop() || "";
 
         for (
           const line of
@@ -2245,7 +2029,6 @@ app.post(
           if (
             finished
           ) {
-
             break;
           }
 
@@ -2294,7 +2077,6 @@ app.post(
           finished ||
           res.writableEnded
         ) {
-
           return;
         }
 
@@ -2334,7 +2116,6 @@ app.post(
         if (
           finished
         ) {
-
           return;
         }
 
@@ -2342,8 +2123,7 @@ app.post(
           true;
 
         if (
-          upstreamResponse?.data
-            ?.destroy
+          upstreamResponse?.data?.destroy
         ) {
 
           upstreamResponse.data.destroy();
@@ -2363,14 +2143,11 @@ app.use(
     if (
       res.headersSent
     ) {
-
       return;
     }
 
     sendOpenAIError(
-
       res,
-
       404,
 
       `Endpoint ${req.path} not found`,
@@ -2405,11 +2182,7 @@ app.listen(
     );
 
     console.log(
-      `Hosted NVIDIA API: ${NIM_API_BASE}`
-    );
-
-    console.log(
-      `Community NVIDIA API: ${COMMUNITY_NIM_API_BASE}`
+      `NVIDIA API: ${NIM_API_BASE}`
     );
 
     console.log(
@@ -2452,10 +2225,7 @@ app.listen(
     ) {
 
       console.log(
-
-        `  ${model.id} -> ` +
-        `${model.upstream} -> ` +
-        `${model.apiBase}`
+        `  ${model.id} -> ${model.upstream}`
       );
     }
 

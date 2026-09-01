@@ -1,39 +1,6 @@
 // ============================================================
 // NVIDIA NIM -> OpenAI-Compatible Streaming Proxy
 // ============================================================
-//
-// CURRENT MODELS
-//
-// kimi-k3
-//   -> moonshotai/kimi-k3
-//
-// deepseek-v4-pro
-//   -> deepseek-ai/deepseek-v4-pro-0813
-//
-// deepseek-v4-flash
-//   -> deepseek-ai/deepseek-v4-flash-0731
-//
-// muse-glimmer-30b
-//   -> meta/muse-glimmer-30b
-//
-// nemotron-3-ultra
-//   -> nvidia/nemotron-3-ultra-550b-a55b
-//
-// gemma-4-31b
-//   -> google/gemma-4-31b-it
-//
-// COMMUNITY / DEPLOYMENT
-//
-// deepseek-r1-32b-uncensored
-//   -> nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-//   -> https://nim.api.nvidia.com/v1
-//
-// FALLBACK
-//
-// gemma-4-31b
-//
-// STREAMING ONLY
-// ============================================================
 
 const express = require("express");
 const cors = require("cors");
@@ -41,31 +8,27 @@ const axios = require("axios");
 
 const app = express();
 
+// ============================================================
+// SERVER
+// ============================================================
+
 const PORT =
   process.env.PORT || 3000;
 
 // ============================================================
-// NVIDIA API ENDPOINTS
+// NVIDIA ENDPOINTS
 // ============================================================
 
-// Standard NVIDIA hosted NIM endpoint.
 const NIM_API_BASE =
   process.env.NIM_API_BASE ||
   "https://integrate.api.nvidia.com/v1";
 
-// NVIDIA API key.
-const NIM_API_KEY =
-  process.env.NIM_API_KEY;
-
-// Community / Deployment endpoint.
-//
-// Used specifically by:
-//
-// nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-//
 const COMMUNITY_NIM_API_BASE =
   process.env.COMMUNITY_NIM_API_BASE ||
   "https://nim.api.nvidia.com/v1";
+
+const NIM_API_KEY =
+  process.env.NIM_API_KEY;
 
 // ============================================================
 // CONFIGURATION
@@ -522,29 +485,37 @@ const MODELS = {
   },
 
   // ==========================================================
-  // COMMUNITY / DEPLOYMENT
-  //
-  // DeepSeek-R1-Distill-Qwen-32B-Uncensored
-  // ==========================================================
-  //
-  // Exact model:
+  // COMMUNITY DEPLOYMENT
   //
   // nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
   //
-  // Endpoint:
+  // IMPORTANT:
   //
-  // https://nim.api.nvidia.com/v1
+  // This model has a deliberately isolated request path.
   //
-  // NVIDIA example:
+  // Verified working request:
   //
-  // model: "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored"
-  // temperature: 0.5
-  // top_p: 1
-  // max_tokens: 1024
-  // stream: true
+  // baseURL:
+  //   https://nim.api.nvidia.com/v1
+  //
+  // model:
+  //   nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
+  //
+  // temperature:
+  //   0.5
+  //
+  // top_p:
+  //   1
+  //
+  // max_tokens:
+  //   1024
+  //
+  // stream:
+  //   true
   //
   // No reasoning_effort.
   // No chat_template_kwargs.
+  // No tools.
   // ==========================================================
 
   "deepseek-r1-32b-uncensored": {
@@ -576,14 +547,8 @@ const MODELS = {
     top_p:
       1.0,
 
-    reasoning: {
-
-      type:
-        "native_reasoning",
-
-      default:
-        true
-    },
+    community:
+      true,
 
     supports: {
 
@@ -612,7 +577,7 @@ const MODELS = {
 };
 
 // ============================================================
-// EXPRESS MIDDLEWARE
+// MIDDLEWARE
 // ============================================================
 
 app.use(
@@ -630,14 +595,13 @@ app.use(
   express.urlencoded({
     limit:
       "100mb",
-
     extended:
       true
   })
 );
 
 // ============================================================
-// MODEL LOOKUP
+// HELPERS
 // ============================================================
 
 function getModel(
@@ -648,37 +612,10 @@ function getModel(
     modelName &&
     MODELS[modelName]
   ) {
-
     return MODELS[modelName];
   }
 
   return null;
-}
-
-// ============================================================
-// THINK TAG CLEANUP
-// ============================================================
-
-function stripThinkTags(
-  text
-) {
-
-  if (
-    typeof text !==
-    "string"
-  ) {
-
-    return text;
-  }
-
-  return text
-    .replace(
-      /<think>[\s\S]*?<\/think>/gi,
-      ""
-    )
-    .replace(
-      /<\/?think>/gi,
-      "");
 }
 
 // ============================================================
@@ -692,7 +629,6 @@ function containsMedia(
   if (
     !Array.isArray(messages)
   ) {
-
     return false;
   }
 
@@ -705,13 +641,11 @@ function containsMedia(
         message?.content
       )
     ) {
-
       continue;
     }
 
     for (
-      const part of
-      message.content
+      const part of message.content
     ) {
 
       if (
@@ -720,7 +654,6 @@ function containsMedia(
         part?.type ===
           "video_url"
       ) {
-
         return true;
       }
     }
@@ -740,14 +673,12 @@ function validateMessages(
   if (
     !Array.isArray(messages)
   ) {
-
     return "messages must be an array";
   }
 
   if (
     messages.length === 0
   ) {
-
     return "messages cannot be empty";
   }
 
@@ -765,7 +696,6 @@ function validateMessages(
       typeof message !==
         "object"
     ) {
-
       return (
         `messages[${i}] must be an object`
       );
@@ -775,7 +705,6 @@ function validateMessages(
       typeof message.role !==
         "string"
     ) {
-
       return (
         `messages[${i}].role must be a string`
       );
@@ -787,7 +716,6 @@ function validateMessages(
       message.tool_calls ===
         undefined
     ) {
-
       return (
         `messages[${i}] must contain content or tool_calls`
       );
@@ -798,24 +726,48 @@ function validateMessages(
 }
 
 // ============================================================
+// THINK TAG CLEANUP
+// ============================================================
+
+function stripThinkTags(
+  text
+) {
+
+  if (
+    typeof text !==
+      "string"
+  ) {
+    return text;
+  }
+
+  return text
+    .replace(
+      /<think>[\s\S]*?<\/think>/gi,
+      ""
+    )
+    .replace(
+      /<\/?think>/gi,
+      "");
+}
+
+// ============================================================
 // REASONING EFFORT
 // ============================================================
 
 function getReasoningEffort(
-  requestBody,
+  body,
   model
 ) {
 
   if (
-    model.reasoning.type !==
+    model.reasoning?.type !==
       "reasoning_effort"
   ) {
-
     return null;
   }
 
   const requested =
-    requestBody.reasoning_effort ??
+    body.reasoning_effort ??
     model.reasoning.default;
 
   if (
@@ -823,20 +775,14 @@ function getReasoningEffort(
       requested
     )
   ) {
-
     return requested;
   }
-
-  console.warn(
-    `[Reasoning] Invalid reasoning_effort "${requested}" ` +
-    `for ${model.id}; using ${model.reasoning.default}`
-  );
 
   return model.reasoning.default;
 }
 
 // ============================================================
-// BUILD NVIDIA REQUEST
+// BUILD STANDARD NVIDIA REQUEST
 // ============================================================
 
 function buildNvidiaRequest(
@@ -879,7 +825,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.top_p
+    model.supports?.top_p
   ) {
 
     if (
@@ -914,25 +860,14 @@ function buildNvidiaRequest(
       null
   ) {
 
-    // NVIDIA's supplied Community model example
-    // uses 1024 when max_tokens is not supplied.
-    if (
-      model.id ===
-        "deepseek-r1-32b-uncensored"
-    ) {
-
-      maxTokens =
-        1024;
-
-    } else {
-
-      maxTokens =
-        16384;
-    }
+    maxTokens =
+      16384;
   }
 
   maxTokens =
-    Number(maxTokens);
+    Number(
+      maxTokens
+    );
 
   if (
     !Number.isFinite(
@@ -941,10 +876,7 @@ function buildNvidiaRequest(
   ) {
 
     maxTokens =
-      model.id ===
-        "deepseek-r1-32b-uncensored"
-        ? 1024
-        : 16384;
+      16384;
   }
 
   maxTokens =
@@ -962,7 +894,7 @@ function buildNvidiaRequest(
 
   if (
     maxTokens >
-    model.maxTokens
+      model.maxTokens
   ) {
 
     maxTokens =
@@ -977,7 +909,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.seed &&
+    model.supports?.seed &&
     body.seed !==
       undefined
   ) {
@@ -991,7 +923,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.stop &&
+    model.supports?.stop &&
     body.stop !==
       undefined
   ) {
@@ -1005,7 +937,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.tools &&
+    model.supports?.tools &&
     body.tools !==
       undefined
   ) {
@@ -1015,7 +947,7 @@ function buildNvidiaRequest(
   }
 
   if (
-    model.supports.tools &&
+    model.supports?.tools &&
     body.tool_choice !==
       undefined
   ) {
@@ -1029,7 +961,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.stream_options &&
+    model.supports?.stream_options &&
     body.stream_options !==
       undefined
   ) {
@@ -1043,7 +975,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.presence_penalty &&
+    model.supports?.presence_penalty &&
     body.presence_penalty !==
       undefined
   ) {
@@ -1057,7 +989,7 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports.frequency_penalty &&
+    model.supports?.frequency_penalty &&
     body.frequency_penalty !==
       undefined
   ) {
@@ -1067,12 +999,8 @@ function buildNvidiaRequest(
   }
 
   // ==========================================================
-  // MODEL-SPECIFIC REASONING
+  // KIMI
   // ==========================================================
-
-  // ----------------------------------------------------------
-  // KIMI K3
-  // ----------------------------------------------------------
 
   if (
     model.id ===
@@ -1086,9 +1014,9 @@ function buildNvidiaRequest(
       );
   }
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // DEEPSEEK V4
-  // ----------------------------------------------------------
+  // ==========================================================
 
   else if (
     model.id ===
@@ -1114,9 +1042,9 @@ function buildNvidiaRequest(
     }
   }
 
-  // ----------------------------------------------------------
-  // MUSE GLIMMER
-  // ----------------------------------------------------------
+  // ==========================================================
+  // MUSE
+  // ==========================================================
 
   else if (
     model.id ===
@@ -1140,9 +1068,9 @@ function buildNvidiaRequest(
     }
   }
 
-  // ----------------------------------------------------------
-  // NEMOTRON 3 ULTRA
-  // ----------------------------------------------------------
+  // ==========================================================
+  // NEMOTRON
+  // ==========================================================
 
   else if (
     model.id ===
@@ -1162,9 +1090,9 @@ function buildNvidiaRequest(
     };
   }
 
-  // ----------------------------------------------------------
-  // GEMMA 4 31B
-  // ----------------------------------------------------------
+  // ==========================================================
+  // GEMMA
+  // ==========================================================
 
   else if (
     model.id ===
@@ -1184,36 +1112,53 @@ function buildNvidiaRequest(
     };
   }
 
-  // ----------------------------------------------------------
-  // COMMUNITY DEEPSEEK R1 DISTILL
-  // ----------------------------------------------------------
-  //
-  // IMPORTANT:
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  //
-  // The NVIDIA example only sends:
-  //
-  // model
-  // messages
-  // temperature
-  // top_p
-  // max_tokens
-  // stream
-  //
-  // The generic fields above already produce that request.
-  // ----------------------------------------------------------
-
-  else if (
-    model.id ===
-      "deepseek-r1-32b-uncensored"
-  ) {
-
-    // Intentionally nothing here.
-  }
-
   return request;
+}
+
+// ============================================================
+// BUILD COMMUNITY REQUEST
+//
+// THIS IS INTENTIONALLY SEPARATE.
+//
+// It reproduces the user's verified working example.
+//
+// The client's temperature/max_tokens can override the
+// defaults, because the proxy should preserve client settings.
+// ============================================================
+
+function buildCommunityRequest(
+  body
+) {
+
+  return {
+
+    model:
+      "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored",
+
+    messages:
+      body.messages,
+
+    temperature:
+      body.temperature !==
+      undefined
+        ? body.temperature
+        : 0.5,
+
+    top_p:
+      body.top_p !==
+      undefined
+        ? body.top_p
+        : 1,
+
+    max_tokens:
+      body.max_tokens !==
+      undefined
+        ? body.max_tokens
+        : 1024,
+
+    stream:
+      true
+  };
 }
 
 // ============================================================
@@ -1221,43 +1166,43 @@ function buildNvidiaRequest(
 // ============================================================
 
 function extractErrorMessage(
-  responseData
+  data
 ) {
 
   if (
-    typeof responseData ===
+    typeof data ===
       "string"
   ) {
 
-    return responseData;
+    return data;
   }
 
   if (
-    responseData?.error?.message
+    data?.error?.message
   ) {
 
-    return responseData.error.message;
+    return data.error.message;
   }
 
   if (
-    typeof responseData?.error ===
+    typeof data?.error ===
       "string"
   ) {
 
-    return responseData.error;
+    return data.error;
   }
 
   if (
-    responseData?.message
+    data?.message
   ) {
 
-    return responseData.message;
+    return data.message;
   }
 
   try {
 
     return JSON.stringify(
-      responseData
+      data
     );
 
   } catch {
@@ -1267,21 +1212,19 @@ function extractErrorMessage(
 }
 
 // ============================================================
-// OPENAI ERROR RESPONSE
+// OPENAI ERROR
 // ============================================================
 
 function sendOpenAIError(
   res,
   status,
   message,
-  code =
-    "nvidia_api_error"
+  code
 ) {
 
   if (
     res.headersSent
   ) {
-
     return;
   }
 
@@ -1296,107 +1239,874 @@ function sendOpenAIError(
         type:
           "invalid_request_error",
 
-        code
+        code:
+          code ||
+          "nvidia_api_error"
       }
     });
 }
 
 // ============================================================
-// HEALTH
+// COMMON NVIDIA AXIOS CONFIG
 // ============================================================
 
-app.get(
-  "/health",
-  (req, res) => {
+function getAxiosConfig() {
 
-    res.json({
+  return {
 
-      status:
-        "ok",
+    headers: {
 
-      streaming:
-        true,
+      Authorization:
+        `Bearer ${NIM_API_KEY}`,
 
-      api_base:
-        NIM_API_BASE,
+      "Content-Type":
+        "application/json",
 
-      community_api_base:
-        COMMUNITY_NIM_API_BASE,
+      Accept:
+        "text/event-stream"
+    },
 
-      fallback_model:
-        FALLBACK_MODEL,
+    responseType:
+      "stream",
 
-      reasoning_display:
-        SHOW_REASONING,
+    timeout:
+      0,
 
-      models:
-        Object.values(
-          MODELS
-        ).map(
-          model => ({
+    validateStatus:
+      () => true
+  };
+}
 
-            id:
-              model.id,
+// ============================================================
+// READ UPSTREAM ERROR STREAM
+// ============================================================
 
-            upstream:
-              model.upstream,
+async function readErrorStream(
+  stream
+) {
 
-            multimodal:
-              model.multimodal,
+  let text =
+    "";
 
-            context_window:
-              model.contextWindow,
+  try {
 
-            max_tokens:
-              model.maxTokens
-          })
-        )
-    });
+    for await (
+      const chunk of stream
+    ) {
+
+      text +=
+        chunk.toString(
+          "utf8"
+        );
+
+      if (
+        text.length >=
+        100000
+      ) {
+
+        break;
+      }
+    }
+
+  } catch {
+    // Ignore secondary stream errors.
   }
-);
+
+  return text;
+}
 
 // ============================================================
-// OPENAI /v1/models
+// WRITE STREAM HEADERS
 // ============================================================
 
-app.get(
-  "/v1/models",
-  (req, res) => {
+function prepareSSE(
+  res
+) {
 
-    const created =
-      Math.floor(
-        Date.now() / 1000
+  res.status(
+    200
+  );
+
+  res.setHeader(
+    "Content-Type",
+    "text/event-stream; charset=utf-8"
+  );
+
+  res.setHeader(
+    "Cache-Control",
+    "no-cache, no-transform"
+  );
+
+  res.setHeader(
+    "Connection",
+    "keep-alive"
+  );
+
+  res.setHeader(
+    "X-Accel-Buffering",
+    "no"
+  );
+
+  // Critical for streaming through Node/proxies.
+  if (
+    typeof res.flushHeaders ===
+      "function"
+  ) {
+
+    res.flushHeaders();
+  }
+}
+
+// ============================================================
+// COMMUNITY STREAM
+//
+// IMPORTANT:
+// Do NOT parse/reconstruct this stream.
+//
+// The supplied working OpenAI SDK example proves that NVIDIA
+// returns a valid OpenAI-compatible stream. Passing the SSE
+// bytes through directly eliminates another possible source
+// of "No response from bot" errors.
+// ============================================================
+
+async function handleCommunityStream(
+  req,
+  res,
+  body
+) {
+
+  const request =
+    buildCommunityRequest(
+      body
+    );
+
+  const endpoint =
+    `${COMMUNITY_NIM_API_BASE}/chat/completions`;
+
+  console.log(
+    `[Community Request] ${request.model} [STREAMING]`
+  );
+
+  console.log(
+    `[Community Endpoint] ${endpoint}`
+  );
+
+  console.log(
+    `[Community Config] ` +
+    `temperature=${request.temperature} ` +
+    `top_p=${request.top_p} ` +
+    `max_tokens=${request.max_tokens} ` +
+    `stream=true`
+  );
+
+  console.log(
+    "[Community Request Body]",
+    JSON.stringify(
+      request
+    )
+  );
+
+  let upstream;
+
+  try {
+
+    upstream =
+      await axios.post(
+        endpoint,
+        request,
+        getAxiosConfig()
       );
 
-    res.json({
+  } catch (
+    error
+  ) {
 
-      object:
-        "list",
+    console.error(
+      "[Community Connection Error]",
+      error.code ||
+      error.message
+    );
 
-      data:
-        Object.values(
-          MODELS
-        ).map(
-          model => ({
+    return sendOpenAIError(
 
-            id:
-              model.id,
+      res,
 
-            object:
-              "model",
+      502,
 
-            created,
+      error.message ||
+        "Community NVIDIA endpoint connection failed",
 
-            owned_by:
-              model.owner
-          })
-        )
-    });
+      "community_connection_error"
+    );
   }
-);
+
+  // ==========================================================
+  // UPSTREAM HTTP ERROR
+  // ==========================================================
+
+  if (
+    upstream.status <
+      200 ||
+    upstream.status >=
+      300
+  ) {
+
+    const errorText =
+      await readErrorStream(
+        upstream.data
+      );
+
+    let parsed =
+      errorText;
+
+    try {
+
+      parsed =
+        JSON.parse(
+          errorText
+        );
+
+    } catch {
+      // Raw text.
+    }
+
+    const message =
+      extractErrorMessage(
+        parsed
+      );
+
+    console.error(
+      `[Community HTTP ${upstream.status}] ${message}`
+    );
+
+    return sendOpenAIError(
+
+      res,
+
+      upstream.status,
+
+      message,
+
+      "community_api_error"
+    );
+  }
+
+  // ==========================================================
+  // START CLIENT STREAM IMMEDIATELY
+  // ==========================================================
+
+  prepareSSE(
+    res
+  );
+
+  let clientClosed =
+    false;
+
+  const onClientClose =
+    () => {
+
+      clientClosed =
+        true;
+
+      if (
+        upstream?.data &&
+        !upstream.data.destroyed
+      ) {
+
+        upstream.data.destroy();
+      }
+    };
+
+  req.once(
+    "close",
+    onClientClose
+  );
+
+  // ==========================================================
+  // DIRECT STREAM
+  // ==========================================================
+
+  upstream.data.on(
+    "error",
+    error => {
+
+      if (
+        clientClosed ||
+        res.writableEnded
+      ) {
+
+        return;
+      }
+
+      console.error(
+        "[Community Stream Error]",
+        error.code ||
+        error.message
+      );
+
+      try {
+
+        res.write(
+          `data: ${JSON.stringify({
+
+            error: {
+
+              message:
+                error.message ||
+                "Community NVIDIA streaming error",
+
+              type:
+                "stream_error"
+            }
+
+          })}\n\n`
+        );
+
+      } catch {
+        // Client disconnected.
+      }
+
+      if (
+        !res.writableEnded
+      ) {
+
+        res.end();
+      }
+    }
+  );
+
+  upstream.data.on(
+    "end",
+    () => {
+
+      if (
+        clientClosed
+      ) {
+
+        return;
+      }
+
+      if (
+        !res.writableEnded
+      ) {
+
+        try {
+
+          res.write(
+            "data: [DONE]\n\n"
+          );
+
+        } catch {
+          // Client disconnected.
+        }
+
+        if (
+          !res.writableEnded
+        ) {
+
+          res.end();
+        }
+      }
+    }
+  );
+
+  upstream.data.on(
+    "data",
+    chunk => {
+
+      if (
+        clientClosed ||
+        res.writableEnded
+      ) {
+
+        return;
+      }
+
+      try {
+
+        res.write(
+          chunk
+        );
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "[Community Client Stream Error]",
+          error.message
+        );
+
+        clientClosed =
+          true;
+
+        if (
+          !upstream.data.destroyed
+        ) {
+
+          upstream.data.destroy();
+        }
+      }
+    }
+  );
+}
 
 // ============================================================
-// STREAMING CHAT COMPLETIONS
+// STANDARD NIM STREAM
+// ============================================================
+
+async function handleStandardStream(
+  req,
+  res,
+  body,
+  model
+) {
+
+  const request =
+    buildNvidiaRequest(
+      body,
+      model
+    );
+
+  const endpoint =
+    `${NIM_API_BASE}/chat/completions`;
+
+  console.log(
+    `[Request] ${model.id} -> ${model.upstream} [STREAMING]`
+  );
+
+  console.log(
+    `[Endpoint] ${endpoint}`
+  );
+
+  console.log(
+    `[Request Config] ` +
+    `temperature=${request.temperature} ` +
+    `top_p=${request.top_p ?? "default"} ` +
+    `max_tokens=${request.max_tokens} ` +
+    `reasoning_effort=${request.reasoning_effort ?? "not-sent"}`
+  );
+
+  let upstream;
+
+  try {
+
+    upstream =
+      await axios.post(
+        endpoint,
+        request,
+        getAxiosConfig()
+      );
+
+  } catch (
+    error
+  ) {
+
+    console.error(
+      "[NVIDIA Connection Error]",
+      error.code ||
+      error.message
+    );
+
+    throw error;
+  }
+
+  // ==========================================================
+  // HTTP ERROR
+  // ==========================================================
+
+  if (
+    upstream.status <
+      200 ||
+    upstream.status >=
+      300
+  ) {
+
+    const errorText =
+      await readErrorStream(
+        upstream.data
+      );
+
+    let parsed =
+      errorText;
+
+    try {
+
+      parsed =
+        JSON.parse(
+          errorText
+        );
+
+    } catch {
+      // Keep text.
+    }
+
+    const message =
+      extractErrorMessage(
+        parsed
+      );
+
+    const error =
+      new Error(
+        message
+      );
+
+    error.status =
+      upstream.status;
+
+    throw error;
+  }
+
+  prepareSSE(
+    res
+  );
+
+  let buffer =
+    "";
+
+  let finished =
+    false;
+
+  let clientClosed =
+    false;
+
+  function finish() {
+
+    if (
+      finished
+    ) {
+
+      return;
+    }
+
+    finished =
+      true;
+
+    if (
+      !res.writableEnded
+    ) {
+
+      try {
+
+        res.write(
+          "data: [DONE]\n\n"
+        );
+
+      } catch {
+        // Client disconnected.
+      }
+
+      if (
+        !res.writableEnded
+      ) {
+
+        res.end();
+      }
+    }
+  }
+
+  function sendChunk(
+    data
+  ) {
+
+    if (
+      finished ||
+      res.writableEnded ||
+      clientClosed
+    ) {
+
+      return;
+    }
+
+    try {
+
+      if (
+        Array.isArray(
+          data?.choices
+        )
+      ) {
+
+        for (
+          const choice of
+          data.choices
+        ) {
+
+          if (
+            !choice?.delta
+          ) {
+
+            continue;
+          }
+
+          if (
+            typeof choice.delta.content ===
+              "string"
+          ) {
+
+            choice.delta.content =
+              stripThinkTags(
+                choice.delta.content
+              );
+          }
+
+          if (
+            !SHOW_REASONING
+          ) {
+
+            delete choice.delta.reasoning;
+
+            delete choice.delta.reasoning_content;
+          }
+        }
+      }
+
+      res.write(
+        `data: ${JSON.stringify(data)}\n\n`
+      );
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[SSE Write Error]",
+        error.message
+      );
+
+      clientClosed =
+        true;
+
+      if (
+        !upstream.data.destroyed
+      ) {
+
+        upstream.data.destroy();
+      }
+    }
+  }
+
+  function processLine(
+    line
+  ) {
+
+    line =
+      line.replace(
+        /\r$/,
+        ""
+      );
+
+    if (
+      !line.trim()
+    ) {
+
+      return;
+    }
+
+    if (
+      line.startsWith(":")
+    ) {
+
+      return;
+    }
+
+    if (
+      !line.startsWith(
+        "data:"
+      )
+    ) {
+
+      return;
+    }
+
+    const raw =
+      line
+        .slice(5)
+        .trim();
+
+    if (
+      raw ===
+      "[DONE]"
+    ) {
+
+      finish();
+
+      return;
+    }
+
+    let parsed;
+
+    try {
+
+      parsed =
+        JSON.parse(
+          raw
+        );
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[SSE Parse Error]",
+        error.message
+      );
+
+      return;
+    }
+
+    sendChunk(
+      parsed
+    );
+  }
+
+  req.once(
+    "close",
+    () => {
+
+      if (
+        finished
+      ) {
+
+        return;
+      }
+
+      clientClosed =
+        true;
+
+      if (
+        upstream?.data &&
+        !upstream.data.destroyed
+      ) {
+
+        upstream.data.destroy();
+      }
+    }
+  );
+
+  upstream.data.on(
+    "data",
+    chunk => {
+
+      if (
+        finished ||
+        clientClosed
+      ) {
+
+        return;
+      }
+
+      buffer +=
+        chunk.toString(
+          "utf8"
+        );
+
+      const lines =
+        buffer.split(
+          "\n"
+        );
+
+      buffer =
+        lines.pop() ||
+        "";
+
+      for (
+        const line of
+        lines
+      ) {
+
+        if (
+          finished ||
+          clientClosed
+        ) {
+
+          break;
+        }
+
+        processLine(
+          line
+        );
+      }
+    }
+  );
+
+  upstream.data.on(
+    "end",
+    () => {
+
+      if (
+        finished ||
+        clientClosed
+      ) {
+
+        return;
+      }
+
+      if (
+        buffer.trim()
+      ) {
+
+        processLine(
+          buffer
+        );
+      }
+
+      finish();
+    }
+  );
+
+  upstream.data.on(
+    "error",
+    error => {
+
+      if (
+        finished ||
+        clientClosed ||
+        res.writableEnded
+      ) {
+
+        return;
+      }
+
+      console.error(
+        "[NVIDIA Stream Error]",
+        error.code ||
+        error.message
+      );
+
+      try {
+
+        res.write(
+          `data: ${JSON.stringify({
+
+            error: {
+
+              message:
+                error.message ||
+                "NVIDIA streaming error",
+
+              type:
+                "stream_error"
+            }
+
+          })}\n\n`
+        );
+
+      } catch {
+        // Client disconnected.
+      }
+
+      if (
+        !res.writableEnded
+      ) {
+
+        res.end();
+      }
+    }
+  );
+}
+
+// ============================================================
+// CHAT COMPLETIONS
 // ============================================================
 
 app.post(
@@ -1407,7 +2117,8 @@ app.post(
   ) => {
 
     const body =
-      req.body || {};
+      req.body ||
+      {};
 
     // ========================================================
     // STREAMING ONLY
@@ -1455,46 +2166,45 @@ app.post(
     }
 
     // ========================================================
-    // SELECT MODEL
+    // MODEL
     // ========================================================
 
     const requestedModel =
       body.model;
 
-    let selectedModel =
+    let model =
       getModel(
         requestedModel
       );
 
     // ========================================================
-    // UNKNOWN MODEL -> FALLBACK
+    // UNKNOWN MODEL
     // ========================================================
 
     if (
-      !selectedModel
+      !model
     ) {
 
       console.warn(
-
         `[Fallback] Unknown model "${requestedModel}". ` +
         `Using "${FALLBACK_MODEL}".`
       );
 
-      selectedModel =
+      model =
         MODELS[
           FALLBACK_MODEL
         ];
     }
 
     // ========================================================
-    // MULTIMODAL VALIDATION
+    // MEDIA VALIDATION
     // ========================================================
 
     if (
       containsMedia(
         body.messages
       ) &&
-      !selectedModel.multimodal
+      !model.multimodal
     ) {
 
       return sendOpenAIError(
@@ -1503,175 +2213,113 @@ app.post(
 
         400,
 
-        `"${selectedModel.id}" does not support image/video input.`,
+        `"${model.id}" does not support image/video input.`,
 
         "multimodal_not_supported"
       );
     }
 
     // ========================================================
-    // BUILD REQUEST
+    // COMMUNITY MODEL
+    //
+    // This path is intentionally isolated from the normal
+    // NIM request builder.
     // ========================================================
 
-    const primaryRequest =
-      buildNvidiaRequest(
-        body,
-        selectedModel
-      );
-
-    const selectedApiBase =
-      selectedModel.apiBase ||
-      NIM_API_BASE;
-
-    console.log(
-      `[Request] ${selectedModel.id} -> ` +
-      `${selectedModel.upstream} ` +
-      `[STREAMING]`
-    );
-
-    console.log(
-      `[Endpoint] ${selectedApiBase}`
-    );
-
-    console.log(
-      `[Request Config] ` +
-      `temperature=${primaryRequest.temperature} ` +
-      `top_p=${primaryRequest.top_p ?? "default"} ` +
-      `max_tokens=${primaryRequest.max_tokens} ` +
-      `reasoning_effort=${primaryRequest.reasoning_effort ?? "not_sent"}`
-    );
-
-    // ========================================================
-    // NVIDIA REQUEST
-    // ========================================================
-
-    let upstreamResponse;
-
-    try {
-
-      upstreamResponse =
-        await axios.post(
-
-          `${selectedApiBase}/chat/completions`,
-
-          primaryRequest,
-
-          {
-
-            headers: {
-
-              Authorization:
-                `Bearer ${NIM_API_KEY}`,
-
-              "Content-Type":
-                "application/json",
-
-              Accept:
-                "text/event-stream"
-            },
-
-            responseType:
-              "stream",
-
-            timeout:
-              0,
-
-            validateStatus:
-              () => true
-          }
-        );
-
-    } catch (
-      error
+    if (
+      model.community
     ) {
 
-      console.error(
-        "[NVIDIA Connection Error]",
-        error.message
-      );
+      try {
 
-      // ======================================================
-      // CONNECTION FALLBACK
-      // ======================================================
-
-      if (
-        selectedModel.id !==
-          FALLBACK_MODEL
-      ) {
-
-        console.warn(
-
-          `[Fallback] ${selectedModel.id} connection failed. ` +
-          `Retrying with ${FALLBACK_MODEL}.`
+        await handleCommunityStream(
+          req,
+          res,
+          body
         );
 
-        try {
+        return;
 
-          const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+      } catch (
+        error
+      ) {
 
-          const fallbackRequest =
-            buildNvidiaRequest(
+        console.error(
+          "[Community Model Error]",
+          error.code ||
+          error.message
+        );
 
+        // ----------------------------------------------------
+        // FALLBACK
+        // ----------------------------------------------------
+
+        if (
+          FALLBACK_MODEL &&
+          FALLBACK_MODEL !==
+            model.id
+        ) {
+
+          console.warn(
+            `[Fallback] Community model failed. ` +
+            `Falling back to ${FALLBACK_MODEL}.`
+          );
+
+          try {
+
+            const fallbackModel =
+              MODELS[
+                FALLBACK_MODEL
+              ];
+
+            await handleStandardStream(
+              req,
+              res,
               {
                 ...body,
 
                 model:
                   FALLBACK_MODEL
               },
-
               fallbackModel
             );
 
-          const fallbackApiBase =
-            fallbackModel.apiBase ||
-            NIM_API_BASE;
+            return;
 
-          upstreamResponse =
-            await axios.post(
+          } catch (
+            fallbackError
+          ) {
 
-              `${fallbackApiBase}/chat/completions`,
-
-              fallbackRequest,
-
-              {
-
-                headers: {
-
-                  Authorization:
-                    `Bearer ${NIM_API_KEY}`,
-
-                  "Content-Type":
-                    "application/json",
-
-                  Accept:
-                    "text/event-stream"
-                },
-
-                responseType:
-                  "stream",
-
-                timeout:
-                  0,
-
-                validateStatus:
-                  () => true
-              }
+            console.error(
+              "[Fallback Error]",
+              fallbackError.code ||
+              fallbackError.message
             );
 
-          selectedModel =
-            fallbackModel;
+            if (
+              !res.headersSent
+            ) {
 
-        } catch (
-          fallbackError
+              return sendOpenAIError(
+
+                res,
+
+                502,
+
+                fallbackError.message ||
+                  "Fallback model failed.",
+
+                "fallback_error"
+              );
+            }
+
+            return;
+          }
+        }
+
+        if (
+          !res.headersSent
         ) {
-
-          console.error(
-            "[Fallback Connection Error]",
-            fallbackError.message
-          );
 
           return sendOpenAIError(
 
@@ -1679,106 +2327,52 @@ app.post(
 
             502,
 
-            fallbackError.message,
+            error.message ||
+              "Community model request failed.",
 
-            "nvidia_fallback_error"
+            "community_model_error"
           );
         }
 
-      } else {
-
-        return sendOpenAIError(
-
-          res,
-
-          502,
-
-          error.message,
-
-          "nvidia_connection_error"
-        );
+        return;
       }
     }
 
     // ========================================================
-    // UPSTREAM HTTP ERROR BEFORE STREAM
+    // STANDARD MODEL
     // ========================================================
 
-    if (
-      upstreamResponse.status <
-        200 ||
-      upstreamResponse.status >=
-        300
+    try {
+
+      await handleStandardStream(
+        req,
+        res,
+        body,
+        model
+      );
+
+    } catch (
+      error
     ) {
 
-      let errorText =
-        "";
-
-      try {
-
-        for await (
-          const chunk of
-          upstreamResponse.data
-        ) {
-
-          errorText +=
-            chunk.toString(
-              "utf8"
-            );
-
-          if (
-            errorText.length >
-            100000
-          ) {
-
-            break;
-          }
-        }
-
-      } catch {
-        // Ignore stream-read failure.
-      }
-
-      let parsedError =
-        errorText;
-
-      try {
-
-        parsedError =
-          JSON.parse(
-            errorText
-          );
-
-      } catch {
-        // Keep raw string.
-      }
-
-      const upstreamMessage =
-        extractErrorMessage(
-          parsedError
-        );
-
       console.error(
-
-        `[NVIDIA HTTP ${upstreamResponse.status}] ` +
-        `${selectedModel.upstream}: ` +
-        upstreamMessage
+        "[Standard NVIDIA Error]",
+        error.code ||
+        error.message
       );
 
       // ======================================================
-      // HTTP FALLBACK
+      // FALLBACK
       // ======================================================
 
       if (
-        selectedModel.id !==
-          FALLBACK_MODEL
+        model.id !==
+        FALLBACK_MODEL
       ) {
 
         console.warn(
-
-          `[Fallback] ${selectedModel.id} returned HTTP ` +
-          `${upstreamResponse.status}. ` +
-          `Retrying with ${FALLBACK_MODEL}.`
+          `[Fallback] ${model.id} failed. ` +
+          `Falling back to ${FALLBACK_MODEL}.`
         );
 
         try {
@@ -1788,138 +2382,23 @@ app.post(
               FALLBACK_MODEL
             ];
 
-          const fallbackRequest =
-            buildNvidiaRequest(
+          await handleStandardStream(
 
-              {
-                ...body,
+            req,
 
-                model:
-                  FALLBACK_MODEL
-              },
+            res,
 
-              fallbackModel
-            );
+            {
+              ...body,
 
-          const fallbackApiBase =
-            fallbackModel.apiBase ||
-            NIM_API_BASE;
+              model:
+                FALLBACK_MODEL
+            },
 
-          const fallbackResponse =
-            await axios.post(
-
-              `${fallbackApiBase}/chat/completions`,
-
-              fallbackRequest,
-
-              {
-
-                headers: {
-
-                  Authorization:
-                    `Bearer ${NIM_API_KEY}`,
-
-                  "Content-Type":
-                    "application/json",
-
-                  Accept:
-                    "text/event-stream"
-                },
-
-                responseType:
-                  "stream",
-
-                timeout:
-                  0,
-
-                validateStatus:
-                  () => true
-              }
-            );
-
-          if (
-            fallbackResponse.status <
-              200 ||
-            fallbackResponse.status >=
-              300
-          ) {
-
-            let fallbackText =
-              "";
-
-            try {
-
-              for await (
-                const chunk of
-                fallbackResponse.data
-              ) {
-
-                fallbackText +=
-                  chunk.toString(
-                    "utf8"
-                  );
-
-                if (
-                  fallbackText.length >
-                  100000
-                ) {
-
-                  break;
-                }
-              }
-
-            } catch {
-              // Ignore.
-            }
-
-            let fallbackParsed =
-              fallbackText;
-
-            try {
-
-              fallbackParsed =
-                JSON.parse(
-                  fallbackText
-                );
-
-            } catch {
-              // Keep raw string.
-            }
-
-            const fallbackMessage =
-              extractErrorMessage(
-                fallbackParsed
-              );
-
-            console.error(
-
-              `[Fallback HTTP ${fallbackResponse.status}] ` +
-              fallbackMessage
-            );
-
-            return sendOpenAIError(
-
-              res,
-
-              fallbackResponse.status,
-
-              fallbackMessage,
-
-              "nvidia_fallback_error"
-            );
-          }
-
-          upstreamResponse =
-            fallbackResponse;
-
-          selectedModel =
-            fallbackModel;
-
-          console.log(
-
-            `[Fallback] Now streaming from ` +
-            `${selectedModel.upstream}`
+            fallbackModel
           );
+
+          return;
 
         } catch (
           fallbackError
@@ -1927,418 +2406,155 @@ app.post(
 
           console.error(
             "[Fallback Error]",
+            fallbackError.code ||
             fallbackError.message
           );
 
-          return sendOpenAIError(
+          if (
+            !res.headersSent
+          ) {
 
-            res,
+            return sendOpenAIError(
 
-            502,
+              res,
 
-            fallbackError.message,
+              502,
 
-            "nvidia_fallback_error"
-          );
+              fallbackError.message ||
+                "Fallback model failed.",
+
+              "fallback_error"
+            );
+          }
+
+          return;
         }
+      }
 
-      } else {
+      if (
+        !res.headersSent
+      ) {
 
         return sendOpenAIError(
 
           res,
 
-          upstreamResponse.status,
+          error.status ||
+            502,
 
-          upstreamMessage,
+          error.message ||
+            "NVIDIA API request failed.",
 
           "nvidia_api_error"
         );
       }
     }
+  }
+);
 
-    // ========================================================
-    // SSE RESPONSE HEADERS
-    // ========================================================
+// ============================================================
+// HEALTH
+// ============================================================
 
-    res.status(200);
+app.get(
+  "/health",
+  (
+    req,
+    res
+  ) => {
 
-    res.setHeader(
-      "Content-Type",
-      "text/event-stream; charset=utf-8"
-    );
+    res.json({
 
-    res.setHeader(
-      "Cache-Control",
-      "no-cache, no-transform"
-    );
+      status:
+        "ok",
 
-    res.setHeader(
-      "Connection",
-      "keep-alive"
-    );
+      streaming:
+        true,
 
-    res.setHeader(
-      "X-Accel-Buffering",
-      "no"
-    );
+      api_base:
+        NIM_API_BASE,
 
-    // ========================================================
-    // STREAM STATE
-    // ========================================================
+      community_api_base:
+        COMMUNITY_NIM_API_BASE,
 
-    let buffer =
-      "";
+      fallback_model:
+        FALLBACK_MODEL,
 
-    let finished =
-      false;
+      reasoning_display:
+        SHOW_REASONING,
 
-    // ========================================================
-    // WRITE SSE
-    // ========================================================
+      models:
+        Object.values(
+          MODELS
+        ).map(
+          model => ({
 
-    function writeSSE(
-      data
-    ) {
+            id:
+              model.id,
 
-      if (
-        finished ||
-        res.writableEnded
-      ) {
+            upstream:
+              model.upstream,
 
-        return;
-      }
+            multimodal:
+              model.multimodal,
 
-      try {
+            community:
+              Boolean(
+                model.community
+              ),
 
-        res.write(
-          `data: ${JSON.stringify(data)}\n\n`
-        );
+            context_window:
+              model.contextWindow,
 
-      } catch (
-        error
-      ) {
-
-        console.error(
-          "[SSE Write Error]",
-          error.message
-        );
-      }
-    }
-
-    // ========================================================
-    // FINISH STREAM
-    // ========================================================
-
-    function finishStream() {
-
-      if (
-        finished
-      ) {
-
-        return;
-      }
-
-      finished =
-        true;
-
-      try {
-
-        if (
-          !res.writableEnded
-        ) {
-
-          res.write(
-            "data: [DONE]\n\n"
-          );
-        }
-
-      } catch {
-        // Client may already be gone.
-      }
-
-      if (
-        !res.writableEnded
-      ) {
-
-        res.end();
-      }
-    }
-
-    // ========================================================
-    // PROCESS SSE LINE
-    // ========================================================
-
-    function processSSELine(
-      line
-    ) {
-
-      line =
-        line.replace(
-          /\r$/,
-          ""
-        );
-
-      if (
-        !line.trim()
-      ) {
-
-        return;
-      }
-
-      if (
-        line.startsWith(":")
-      ) {
-
-        return;
-      }
-
-      if (
-        !line.startsWith(
-          "data:"
+            max_tokens:
+              model.maxTokens
+          })
         )
-      ) {
+    });
+  }
+);
 
-        return;
-      }
+// ============================================================
+// /v1/models
+// ============================================================
 
-      const raw =
-        line
-          .slice(5)
-          .trim();
+app.get(
+  "/v1/models",
+  (
+    req,
+    res
+  ) => {
 
-      if (
-        raw ===
-        "[DONE]"
-      ) {
-
-        finishStream();
-
-        return;
-      }
-
-      let parsed;
-
-      try {
-
-        parsed =
-          JSON.parse(
-            raw
-          );
-
-      } catch (
-        error
-      ) {
-
-        console.error(
-
-          "[SSE JSON Parse Error]",
-          error.message,
-
-          raw.substring(
-            0,
-            500
-          )
-        );
-
-        return;
-      }
-
-      // ======================================================
-      // NORMALIZE RESPONSE
-      // ======================================================
-
-      if (
-        Array.isArray(
-          parsed.choices
-        )
-      ) {
-
-        for (
-          const choice of
-          parsed.choices
-        ) {
-
-          if (
-            !choice?.delta
-          ) {
-
-            continue;
-          }
-
-          if (
-            typeof choice.delta.content ===
-              "string"
-          ) {
-
-            choice.delta.content =
-              stripThinkTags(
-                choice.delta.content
-              );
-          }
-
-          if (
-            !SHOW_REASONING
-          ) {
-
-            delete choice.delta.reasoning;
-
-            delete choice.delta.reasoning_content;
-          }
-        }
-      }
-
-      // ======================================================
-      // SEND TO CLIENT
-      // ======================================================
-
-      writeSSE(
-        parsed
+    const created =
+      Math.floor(
+        Date.now() /
+          1000
       );
-    }
 
-    // ========================================================
-    // UPSTREAM DATA
-    // ========================================================
+    res.json({
 
-    upstreamResponse.data.on(
-      "data",
-      chunk => {
+      object:
+        "list",
 
-        if (
-          finished ||
-          res.writableEnded
-        ) {
+      data:
+        Object.values(
+          MODELS
+        ).map(
+          model => ({
 
-          return;
-        }
+            id:
+              model.id,
 
-        buffer +=
-          chunk.toString(
-            "utf8"
-          );
+            object:
+              "model",
 
-        const lines =
-          buffer.split(
-            "\n"
-          );
+            created,
 
-        buffer =
-          lines.pop() ||
-          "";
-
-        for (
-          const line of
-          lines
-        ) {
-
-          if (
-            finished
-          ) {
-
-            break;
-          }
-
-          processSSELine(
-            line
-          );
-        }
-      }
-    );
-
-    // ========================================================
-    // UPSTREAM END
-    // ========================================================
-
-    upstreamResponse.data.on(
-      "end",
-      () => {
-
-        if (
-          buffer.trim()
-        ) {
-
-          processSSELine(
-            buffer
-          );
-        }
-
-        finishStream();
-      }
-    );
-
-    // ========================================================
-    // UPSTREAM ERROR
-    // ========================================================
-
-    upstreamResponse.data.on(
-      "error",
-      error => {
-
-        console.error(
-          "[NVIDIA Stream Error]",
-          error.message
-        );
-
-        if (
-          finished ||
-          res.writableEnded
-        ) {
-
-          return;
-        }
-
-        writeSSE({
-
-          error: {
-
-            message:
-              error.message ||
-              "NVIDIA streaming error",
-
-            type:
-              "stream_error"
-          }
-        });
-
-        finished =
-          true;
-
-        if (
-          !res.writableEnded
-        ) {
-
-          res.end();
-        }
-      }
-    );
-
-    // ========================================================
-    // CLIENT DISCONNECT
-    // ========================================================
-
-    req.on(
-      "close",
-      () => {
-
-        if (
-          finished
-        ) {
-
-          return;
-        }
-
-        finished =
-          true;
-
-        if (
-          upstreamResponse?.data?.destroy
-        ) {
-
-          upstreamResponse.data.destroy();
-        }
-      }
-    );
+            owned_by:
+              model.owner
+          })
+        )
+    });
   }
 );
 
@@ -2347,7 +2563,10 @@ app.post(
 // ============================================================
 
 app.use(
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
 
     if (
       res.headersSent
@@ -2382,7 +2601,7 @@ app.listen(
     );
 
     console.log(
-      " NVIDIA NIM OpenAI-Compatible Proxy"
+      " NVIDIA NIM OpenAI-Compatible Streaming Proxy"
     );
 
     console.log(
@@ -2398,7 +2617,7 @@ app.listen(
     );
 
     console.log(
-      `Community NVIDIA API: ${COMMUNITY_NIM_API_BASE}`
+      `Community API: ${COMMUNITY_NIM_API_BASE}`
     );
 
     console.log(
@@ -2441,7 +2660,12 @@ app.listen(
     ) {
 
       console.log(
-        `  ${model.id} -> ${model.upstream}`
+        `  ${model.id} -> ${model.upstream}` +
+        `${
+          model.community
+            ? " [COMMUNITY]"
+            : ""
+        }`
       );
     }
 

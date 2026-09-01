@@ -485,7 +485,8 @@ const MODELS = {
   },
 
   // ==========================================================
-  // COMMUNITY DEPLOYMENT
+  // COMMUNITY:
+  // nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
   // ==========================================================
 
   "deepseek-r1-32b-uncensored": {
@@ -582,7 +583,6 @@ function getModel(
     modelName &&
     MODELS[modelName]
   ) {
-
     return MODELS[modelName];
   }
 
@@ -600,7 +600,6 @@ function containsMedia(
   if (
     !Array.isArray(messages)
   ) {
-
     return false;
   }
 
@@ -613,7 +612,6 @@ function containsMedia(
         message?.content
       )
     ) {
-
       continue;
     }
 
@@ -1098,63 +1096,12 @@ function buildNvidiaRequest(
 }
 
 // ============================================================
-// BUILD COMMUNITY REQUEST
+// COMMUNITY REQUEST
 // ============================================================
 
 function buildCommunityRequest(
   body
 ) {
-
-  let maxTokens =
-    body.max_tokens;
-
-  if (
-    maxTokens ===
-      undefined ||
-    maxTokens ===
-      null
-  ) {
-
-    maxTokens =
-      1024;
-  }
-
-  maxTokens =
-    Number(
-      maxTokens
-    );
-
-  if (
-    !Number.isFinite(
-      maxTokens
-    )
-  ) {
-
-    maxTokens =
-      1024;
-  }
-
-  maxTokens =
-    Math.floor(
-      maxTokens
-    );
-
-  if (
-    maxTokens < 1
-  ) {
-
-    maxTokens =
-      1;
-  }
-
-  if (
-    maxTokens >
-      32768
-  ) {
-
-    maxTokens =
-      32768;
-  }
 
   return {
 
@@ -1177,7 +1124,10 @@ function buildCommunityRequest(
         : 1,
 
     max_tokens:
-      maxTokens,
+      body.max_tokens !==
+      undefined
+        ? body.max_tokens
+        : 1024,
 
     stream:
       true
@@ -1271,7 +1221,7 @@ function sendOpenAIError(
 }
 
 // ============================================================
-// COMMON NVIDIA AXIOS CONFIG
+// AXIOS CONFIG
 // ============================================================
 
 function getAxiosConfig() {
@@ -1340,7 +1290,7 @@ async function readErrorStream(
 }
 
 // ============================================================
-// WRITE STREAM HEADERS
+// SSE HEADERS
 // ============================================================
 
 function prepareSSE(
@@ -1381,171 +1331,29 @@ function prepareSSE(
 }
 
 // ============================================================
-// NORMALIZE COMMUNITY SSE CHUNK
-// ============================================================
-
-function processCommunitySSELine(
-  line
-) {
-
-  line =
-    line.replace(
-      /\r$/,
-      ""
-    );
-
-  if (
-    !line.trim()
-  ) {
-
-    return null;
-  }
-
-  if (
-    line.startsWith(":")
-  ) {
-
-    return null;
-  }
-
-  if (
-    !line.startsWith(
-      "data:"
-    )
-  ) {
-
-    return null;
-  }
-
-  const raw =
-    line
-      .slice(5)
-      .trim();
-
-  if (
-    raw ===
-      "[DONE]"
-  ) {
-
-    return {
-
-      done:
-        true,
-
-      raw:
-        "data: [DONE]\n\n",
-
-      data:
-        null,
-
-      hasContent:
-        false
-    };
-  }
-
-  let parsed;
-
-  try {
-
-    parsed =
-      JSON.parse(
-        raw
-      );
-
-  } catch {
-
-    return null;
-  }
-
-  let hasContent =
-    false;
-
-  if (
-    Array.isArray(
-      parsed?.choices
-    )
-  ) {
-
-    for (
-      const choice of
-      parsed.choices
-    ) {
-
-      const delta =
-        choice?.delta;
-
-      if (
-        typeof delta?.content ===
-          "string" &&
-        delta.content.length >
-          0
-      ) {
-
-        hasContent =
-          true;
-      }
-
-      if (
-        typeof delta?.reasoning_content ===
-          "string" &&
-        delta.reasoning_content.length >
-          0
-      ) {
-
-        hasContent =
-          true;
-      }
-
-      if (
-        typeof delta?.reasoning ===
-          "string" &&
-        delta.reasoning.length >
-          0
-      ) {
-
-        hasContent =
-          true;
-      }
-    }
-  }
-
-  return {
-
-    done:
-      false,
-
-    raw:
-      `data: ${JSON.stringify(parsed)}\n\n`,
-
-    data:
-      parsed,
-
-    hasContent
-  };
-}
-
-// ============================================================
 // COMMUNITY STREAM
 //
 // IMPORTANT FIX:
 //
-// NVIDIA may return:
+// The community endpoint can send:
 //
 //   delta: {
 //     role: "assistant",
 //     content: ""
 //   }
 //
-// and immediately close.
+// and then immediately close.
 //
-// We DO NOT send that empty response to Janitor.
+// We DO NOT send this empty initial chunk to Janitor.
 //
-// Instead, we buffer the stream until actual content or
-// reasoning is received.
+// We wait until actual generated content/reasoning arrives.
 //
-// If NVIDIA closes without producing content, we return false
-// so the caller can invoke the fallback model BEFORE SSE
-// headers are sent.
+// If upstream closes without generated content, this function
+// rejects with "no_generated_content" BEFORE SSE headers are
+// sent. The caller can then use the fallback model.
+//
+// This prevents Janitor AI from receiving a successful SSE
+// response containing no assistant output.
 // ============================================================
 
 async function handleCommunityStream(
@@ -1563,15 +1371,7 @@ async function handleCommunityStream(
     `${COMMUNITY_NIM_API_BASE}/chat/completions`;
 
   console.log(
-    "=================================================="
-  );
-
-  console.log(
-    "[Community Request]"
-  );
-
-  console.log(
-    `[Community Model] ${request.model}`
+    `[Community Request] ${request.model} [STREAMING]`
   );
 
   console.log(
@@ -1589,12 +1389,10 @@ async function handleCommunityStream(
   console.log(
     "[Community Request Body]",
     JSON.stringify(
-      request
+      request,
+      null,
+      2
     )
-  );
-
-  console.log(
-    "=================================================="
   );
 
   let upstream;
@@ -1618,11 +1416,14 @@ async function handleCommunityStream(
       error.message
     );
 
-    throw error;
+    throw new Error(
+      error.message ||
+      "Community NVIDIA endpoint connection failed"
+    );
   }
 
   // ==========================================================
-  // UPSTREAM HTTP ERROR
+  // HTTP ERROR
   // ==========================================================
 
   if (
@@ -1648,7 +1449,7 @@ async function handleCommunityStream(
         );
 
     } catch {
-      // Raw text.
+      // Keep raw text.
     }
 
     const message =
@@ -1672,22 +1473,11 @@ async function handleCommunityStream(
   }
 
   // ==========================================================
-  // IMPORTANT:
-  //
-  // DO NOT PREPARE SSE YET.
-  //
-  // We have to determine whether the community model
-  // actually generates anything.
+  // STATE
   // ==========================================================
 
   let buffer =
     "";
-
-  let pendingOutput =
-    [];
-
-  let started =
-    false;
 
   let finished =
     false;
@@ -1698,221 +1488,40 @@ async function handleCommunityStream(
   let receivedContent =
     false;
 
-  let receivedDone =
+  let receivedReasoning =
     false;
 
-  function startClientStream() {
+  let receivedAnythingUseful =
+    false;
 
-    if (
-      started
-    ) {
+  let started =
+    false;
 
-      return;
-    }
+  // ==========================================================
+  // CLEANUP
+  // ==========================================================
 
-    started =
-      true;
-
-    prepareSSE(
-      res
-    );
-
-    for (
-      const output of
-      pendingOutput
-    ) {
-
-      if (
-        !res.writableEnded &&
-        !clientClosed
-      ) {
-
-        try {
-
-          res.write(
-            output
-          );
-
-        } catch {
-
-          clientClosed =
-            true;
-        }
-      }
-    }
-
-    pendingOutput =
-      [];
-  }
-
-  function finishStream() {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    finished =
-      true;
-
-    if (
-      !started
-    ) {
-
-      return;
-    }
-
-    if (
-      !res.writableEnded
-    ) {
-
-      try {
-
-        res.write(
-          "data: [DONE]\n\n"
-        );
-
-      } catch {
-        // Client disconnected.
-      }
-
-      if (
-        !res.writableEnded
-      ) {
-
-        res.end();
-      }
-    }
-  }
-
-  function sendOutput(
-    output
-  ) {
-
-    if (
-      clientClosed ||
-      res.writableEnded
-    ) {
-
-      return;
-    }
-
-    if (
-      started
-    ) {
-
-      try {
-
-        res.write(
-          output
-        );
-
-      } catch {
-
-        clientClosed =
-          true;
-
-        if (
-          upstream?.data &&
-          !upstream.data.destroyed
-        ) {
-
-          upstream.data.destroy();
-        }
-      }
-
-    } else {
-
-      pendingOutput.push(
-        output
-      );
-    }
-  }
-
-  function processLine(
-    line
-  ) {
-
-    const result =
-      processCommunitySSELine(
-        line
-      );
-
-    if (
-      !result
-    ) {
-
-      return;
-    }
-
-    if (
-      result.done
-    ) {
-
-      receivedDone =
-        true;
-
-      console.log(
-        "[Community Stream] NVIDIA sent [DONE]."
-      );
-
-      finishStream();
-
-      return;
-    }
-
-    console.log(
-      `[Community Stream Chunk] ` +
-      `${Buffer.byteLength(result.raw, "utf8")} bytes`
-    );
-
-    console.log(
-      "[Community Stream Data]",
-      result.raw.trim()
-    );
-
-    if (
-      result.hasContent
-    ) {
-
-      receivedContent =
-        true;
-
-      // ------------------------------------------------------
-      // We finally have actual generated content.
-      // Now it is safe to expose the stream to Janitor.
-      // ------------------------------------------------------
-
-      if (
-        !started
-      ) {
-
-        console.log(
-          "[Community Stream] Actual content detected. Starting client SSE."
-        );
-
-        startClientStream();
-
-      }
-    }
-
-    // --------------------------------------------------------
-    // If content has not been detected yet, hold the chunk.
-    // --------------------------------------------------------
-
-    sendOutput(
-      result.raw
-    );
-  }
-
-  req.once(
-    "close",
+  const destroyUpstream =
     () => {
 
       if (
-        finished
+        upstream?.data &&
+        !upstream.data.destroyed
+      ) {
+
+        upstream.data.destroy();
+      }
+    };
+
+  // ==========================================================
+  // CLIENT DISCONNECT
+  // ==========================================================
+
+  const onClientClose =
+    () => {
+
+      if (
+        res.writableEnded
       ) {
 
         return;
@@ -1925,39 +1534,409 @@ async function handleCommunityStream(
         "[Community Stream] Client disconnected."
       );
 
-      if (
-        upstream?.data &&
-        !upstream.data.destroyed
-      ) {
+      destroyUpstream();
+    };
 
-        upstream.data.destroy();
-      }
-    }
+  req.once(
+    "close",
+    onClientClose
   );
 
-  upstream.data.on(
-    "data",
-    chunk => {
+  // ==========================================================
+  // FINISH
+  // ==========================================================
+
+  function finish() {
+
+    if (
+      finished
+    ) {
+
+      return;
+    }
+
+    finished =
+      true;
+
+    console.log(
+      `[Community Stream] Finished. ` +
+      `content=${receivedContent} ` +
+      `reasoning=${receivedReasoning} ` +
+      `useful=${receivedAnythingUseful} ` +
+      `started=${started}`
+    );
+
+    if (
+      !res.headersSent
+    ) {
+
+      return;
+    }
+
+    if (
+      res.writableEnded
+    ) {
+
+      return;
+    }
+
+    try {
+
+      res.write(
+        "data: [DONE]\n\n"
+      );
+
+    } catch {
+      // Client disconnected.
+    }
+
+    if (
+      !res.writableEnded
+    ) {
+
+      res.end();
+    }
+  }
+
+  // ==========================================================
+  // SEND ACTUAL CONTENT
+  // ==========================================================
+
+  function sendCommunityChunk(
+    data
+  ) {
+
+    if (
+      clientClosed ||
+      res.writableEnded ||
+      finished
+    ) {
+
+      return;
+    }
+
+    const choices =
+      Array.isArray(
+        data?.choices
+      )
+        ? data.choices
+        : [];
+
+    let hasContent =
+      false;
+
+    let hasReasoning =
+      false;
+
+    for (
+      const choice of choices
+    ) {
+
+      const delta =
+        choice?.delta;
 
       if (
-        clientClosed ||
-        finished
+        !delta
       ) {
 
-        return;
+        continue;
       }
 
-      const text =
+      if (
+        typeof delta.content ===
+          "string" &&
+        delta.content.length >
+          0
+      ) {
+
+        hasContent =
+          true;
+      }
+
+      if (
+        typeof delta.reasoning_content ===
+          "string" &&
+        delta.reasoning_content.length >
+          0
+      ) {
+
+        hasReasoning =
+          true;
+      }
+
+      if (
+        typeof delta.reasoning ===
+          "string" &&
+        delta.reasoning.length >
+          0
+      ) {
+
+        hasReasoning =
+          true;
+      }
+    }
+
+    // --------------------------------------------------------
+    // EMPTY ROLE CHUNK
+    //
+    // Do NOT send it to Janitor.
+    // --------------------------------------------------------
+
+    if (
+      !hasContent &&
+      !hasReasoning
+    ) {
+
+      console.log(
+        "[Community Stream] Ignoring empty upstream chunk."
+      );
+
+      return;
+    }
+
+    receivedAnythingUseful =
+      true;
+
+    if (
+      hasContent
+    ) {
+
+      receivedContent =
+        true;
+    }
+
+    if (
+      hasReasoning
+    ) {
+
+      receivedReasoning =
+        true;
+    }
+
+    // --------------------------------------------------------
+    // First actual output.
+    //
+    // Only NOW send SSE headers.
+    // --------------------------------------------------------
+
+    if (
+      !started
+    ) {
+
+      prepareSSE(
+        res
+      );
+
+      started =
+        true;
+
+      console.log(
+        "[Community Stream] First generated output received. SSE started."
+      );
+    }
+
+    // --------------------------------------------------------
+    // Clean think tags from normal content.
+    // --------------------------------------------------------
+
+    for (
+      const choice of choices
+    ) {
+
+      if (
+        !choice?.delta
+      ) {
+
+        continue;
+      }
+
+      if (
+        typeof choice.delta.content ===
+          "string"
+      ) {
+
+        choice.delta.content =
+          stripThinkTags(
+            choice.delta.content
+          );
+      }
+
+      if (
+        !SHOW_REASONING
+      ) {
+
+        delete choice.delta.reasoning;
+
+        delete choice.delta.reasoning_content;
+      }
+    }
+
+    try {
+
+      res.write(
+        `data: ${JSON.stringify(data)}\n\n`
+      );
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[Community Client SSE Error]",
+        error.message
+      );
+
+      clientClosed =
+        true;
+
+      destroyUpstream();
+    }
+  }
+
+  // ==========================================================
+  // PROCESS SSE LINE
+  // ==========================================================
+
+  function processLine(
+    line
+  ) {
+
+    line =
+      line.replace(
+        /\r$/,
+        ""
+      );
+
+    if (
+      !line.trim()
+    ) {
+
+      return;
+    }
+
+    if (
+      line.startsWith(":")
+    ) {
+
+      return;
+    }
+
+    if (
+      !line.startsWith(
+        "data:"
+      )
+    ) {
+
+      return;
+    }
+
+    const raw =
+      line
+        .slice(5)
+        .trim();
+
+    if (
+      raw ===
+      "[DONE]"
+    ) {
+
+      console.log(
+        "[Community Stream] Received [DONE]."
+      );
+
+      if (
+        receivedAnythingUseful
+      ) {
+
+        finish();
+
+      } else {
+
+        console.warn(
+          "[Community Stream] Received [DONE] without generated content."
+        );
+
+        finished =
+          true;
+
+        destroyUpstream();
+
+        const error =
+          new Error(
+            "Community model returned no generated content."
+          );
+
+        error.code =
+          "no_generated_content";
+
+        throw error;
+      }
+
+      return;
+    }
+
+    let parsed;
+
+    try {
+
+      parsed =
+        JSON.parse(
+          raw
+        );
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[Community SSE Parse Error]",
+        error.message
+      );
+
+      return;
+    }
+
+    console.log(
+      "[Community Stream Chunk]",
+      Buffer.byteLength(
+        line,
+        "utf8"
+      ),
+      "bytes"
+    );
+
+    console.log(
+      "[Community Stream Data]",
+      line
+    );
+
+    sendCommunityChunk(
+      parsed
+    );
+  }
+
+  // ==========================================================
+  // STREAM PROCESSING
+  // ==========================================================
+
+  try {
+
+    for await (
+      const chunk of
+      upstream.data
+    ) {
+
+      if (
+        clientClosed
+      ) {
+
+        break;
+      }
+
+      buffer +=
         chunk.toString(
           "utf8"
         );
-
-      console.log(
-        `[Community Raw Chunk] ${Buffer.byteLength(text, "utf8")} bytes`
-      );
-
-      buffer +=
-        text;
 
       const lines =
         buffer.split(
@@ -1974,8 +1953,7 @@ async function handleCommunityStream(
       ) {
 
         if (
-          clientClosed ||
-          finished
+          clientClosed
         ) {
 
           break;
@@ -1986,126 +1964,155 @@ async function handleCommunityStream(
         );
       }
     }
-  );
 
-  // ==========================================================
-  // UPSTREAM END
-  // ==========================================================
+  } catch (
+    error
+  ) {
 
-  await new Promise(
-    resolve => {
+    if (
+      clientClosed
+    ) {
 
-      upstream.data.once(
-        "end",
-        () => {
-
-          if (
-            finished
-          ) {
-
-            resolve();
-
-            return;
-          }
-
-          // Process remaining buffered SSE line.
-          if (
-            buffer.trim()
-          ) {
-
-            processLine(
-              buffer
-            );
-          }
-
-          console.log(
-            "[Community Stream] NVIDIA upstream ended."
-          );
-
-          console.log(
-            `[Community Stream] ` +
-            `receivedContent=${receivedContent} ` +
-            `done=${receivedDone} ` +
-            `started=${started}`
-          );
-
-          // --------------------------------------------------
-          // CRITICAL:
-          //
-          // NVIDIA closed without content.
-          //
-          // Return false so caller can use fallback.
-          // --------------------------------------------------
-
-          if (
-            !receivedContent
-          ) {
-
-            console.warn(
-              "[Community Stream] NVIDIA closed without generated content."
-            );
-
-            console.warn(
-              "[Community Stream] Falling back BEFORE sending SSE headers."
-            );
-
-            resolve();
-
-            return;
-          }
-
-          // --------------------------------------------------
-          // Content existed.
-          // Finish normally.
-          // --------------------------------------------------
-
-          if (
-            !finished
-          ) {
-
-            finishStream();
-          }
-
-          resolve();
-        }
-      );
-
-      upstream.data.once(
-        "error",
-        error => {
-
-          console.error(
-            "[Community Stream Error]",
-            error.code ||
-            error.message
-          );
-
-          resolve();
-        }
-      );
+      return;
     }
-  );
+
+    console.error(
+      "[Community Stream Error]",
+      error.code ||
+      error.message
+    );
+
+    if (
+      receivedAnythingUseful
+    ) {
+
+      if (
+        !res.writableEnded
+      ) {
+
+        try {
+
+          res.write(
+            `data: ${JSON.stringify({
+
+              error: {
+
+                message:
+                  error.message ||
+                  "Community NVIDIA streaming error",
+
+                type:
+                  "stream_error"
+              }
+
+            })}\n\n`
+          );
+
+        } catch {
+          // Client disconnected.
+        }
+
+        if (
+          !res.writableEnded
+        ) {
+
+          res.end();
+        }
+      }
+
+      return;
+    }
+
+    throw error;
+  }
 
   // ==========================================================
-  // RESULT
+  // PROCESS FINAL PARTIAL LINE
   // ==========================================================
 
   if (
-    receivedContent
+    buffer.trim() &&
+    !clientClosed
   ) {
 
-    console.log(
-      "[Community Stream] Finished successfully."
-    );
+    try {
 
-    return true;
+      processLine(
+        buffer
+      );
+
+    } catch (
+      error
+    ) {
+
+      if (
+        error.code ===
+        "no_generated_content"
+      ) {
+
+        throw error;
+      }
+
+      console.error(
+        "[Community Final Line Error]",
+        error.message
+      );
+    }
   }
 
+  // ==========================================================
+  // UPSTREAM CLOSED
+  // ==========================================================
+
   console.log(
-    "[Community Stream] No generated content received."
+    "[Community Stream] NVIDIA upstream ended."
   );
 
-  return false;
+  console.log(
+    `[Community Stream] ` +
+    `receivedContent=${receivedContent} ` +
+    `receivedReasoning=${receivedReasoning} ` +
+    `started=${started}`
+  );
+
+  // ----------------------------------------------------------
+  // CRITICAL:
+  //
+  // Upstream closed without actual output.
+  // Do NOT send anything to Janitor.
+  // Throw so caller can fallback.
+  // ----------------------------------------------------------
+
+  if (
+    !receivedAnythingUseful
+  ) {
+
+    console.warn(
+      "[Community Stream] NVIDIA closed without generated content."
+    );
+
+    console.warn(
+      "[Community Stream] Falling back BEFORE sending SSE headers."
+    );
+
+    const error =
+      new Error(
+        "Community model returned no generated content."
+      );
+
+    error.code =
+      "no_generated_content";
+
+    throw error;
+  }
+
+  // ----------------------------------------------------------
+  // We already started the stream.
+  // Send DONE ourselves because some community responses
+  // close without [DONE].
+  // ----------------------------------------------------------
+
+  finish();
 }
 
 // ============================================================
@@ -2560,22 +2567,6 @@ async function handleStandardStream(
       }
     }
   );
-
-  // Keep this function pending until upstream finishes.
-  await new Promise(
-    resolve => {
-
-      upstream.data.once(
-        "end",
-        resolve
-      );
-
-      upstream.data.once(
-        "error",
-        resolve
-      );
-    }
-  );
 }
 
 // ============================================================
@@ -2694,14 +2685,6 @@ app.post(
 
     // ========================================================
     // COMMUNITY MODEL
-    //
-    // SPECIAL HANDLING:
-    //
-    // The community deployment may return a valid SSE
-    // connection but zero generated content.
-    //
-    // We therefore wait for actual output before committing
-    // the response headers.
     // ========================================================
 
     if (
@@ -2710,35 +2693,13 @@ app.post(
 
       try {
 
-        const communityWorked =
-          await handleCommunityStream(
-            req,
-            res,
-            body
-          );
-
-        // ----------------------------------------------------
-        // COMMUNITY PRODUCED ACTUAL OUTPUT
-        // ----------------------------------------------------
-
-        if (
-          communityWorked
-        ) {
-
-          return;
-        }
-
-        // ----------------------------------------------------
-        // COMMUNITY RETURNED ZERO CONTENT
-        //
-        // Since headers have NOT been sent, fallback is still
-        // possible.
-        // ----------------------------------------------------
-
-        console.warn(
-          `[Fallback] ${model.id} returned no generated content. ` +
-          `Falling back to ${FALLBACK_MODEL}.`
+        await handleCommunityStream(
+          req,
+          res,
+          body
         );
+
+        return;
 
       } catch (
         error
@@ -2750,95 +2711,141 @@ app.post(
           error.message
         );
 
-        console.warn(
-          `[Fallback] Community model request failed. ` +
-          `Falling back to ${FALLBACK_MODEL}.`
-        );
-      }
+        // ----------------------------------------------------
+        // IMPORTANT:
+        //
+        // If community failed BEFORE SSE headers were sent,
+        // fallback is safe.
+        // ----------------------------------------------------
 
-      // ======================================================
-      // COMMUNITY FALLBACK
-      // ======================================================
+        if (
+          !res.headersSent &&
+          FALLBACK_MODEL &&
+          FALLBACK_MODEL !==
+            model.id
+        ) {
 
-      if (
-        FALLBACK_MODEL &&
-        FALLBACK_MODEL !==
-          model.id
-      ) {
-
-        try {
-
-          const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
-
-          await handleStandardStream(
-
-            req,
-
-            res,
-
-            {
-              ...body,
-
-              model:
-                FALLBACK_MODEL
-            },
-
-            fallbackModel
+          console.warn(
+            `[Fallback] ${model.id} failed. ` +
+            `Falling back to ${FALLBACK_MODEL}.`
           );
 
-          return;
+          try {
 
-        } catch (
-          fallbackError
+            const fallbackModel =
+              MODELS[
+                FALLBACK_MODEL
+              ];
+
+            await handleStandardStream(
+              req,
+              res,
+              {
+                ...body,
+
+                model:
+                  FALLBACK_MODEL
+              },
+              fallbackModel
+            );
+
+            return;
+
+          } catch (
+            fallbackError
+          ) {
+
+            console.error(
+              "[Fallback Error]",
+              fallbackError.code ||
+              fallbackError.message
+            );
+
+            if (
+              !res.headersSent
+            ) {
+
+              return sendOpenAIError(
+
+                res,
+
+                fallbackError.status ||
+                  502,
+
+                fallbackError.message ||
+                  "Fallback model failed.",
+
+                "fallback_error"
+              );
+            }
+
+            return;
+          }
+        }
+
+        // ----------------------------------------------------
+        // If headers have already been sent, we CANNOT replace
+        // the response with another model.
+        // ----------------------------------------------------
+
+        if (
+          res.headersSent
         ) {
 
           console.error(
-            "[Fallback Error]",
-            fallbackError.code ||
-            fallbackError.message
+            "[Community] SSE already started; fallback cannot replace active stream."
           );
 
           if (
-            !res.headersSent
+            !res.writableEnded
           ) {
 
-            return sendOpenAIError(
+            try {
 
-              res,
+              res.write(
+                `data: ${JSON.stringify({
 
-              502,
+                  error: {
 
-              fallbackError.message ||
-                "Fallback model failed.",
+                    message:
+                      error.message ||
+                      "Community model streaming failed.",
 
-              "fallback_error"
-            );
+                    type:
+                      "stream_error"
+                  }
+
+                })}\n\n`
+              );
+
+            } catch {
+              // Client disconnected.
+            }
+
+            if (
+              !res.writableEnded
+            ) {
+
+              res.end();
+            }
           }
 
           return;
         }
-      }
-
-      if (
-        !res.headersSent
-      ) {
 
         return sendOpenAIError(
 
           res,
 
-          502,
+          error.status ||
+            502,
 
-          "Community model returned no generated content.",
+          error.message ||
+            "Community model request failed.",
 
-          "community_empty_response"
+          "community_model_error"
         );
       }
-
-      return;
     }
 
     // ========================================================
@@ -2870,7 +2877,8 @@ app.post(
 
       if (
         model.id !==
-        FALLBACK_MODEL
+          FALLBACK_MODEL &&
+        !res.headersSent
       ) {
 
         console.warn(
@@ -2921,7 +2929,8 @@ app.post(
 
               res,
 
-              502,
+              fallbackError.status ||
+                502,
 
               fallbackError.message ||
                 "Fallback model failed.",
@@ -2950,6 +2959,37 @@ app.post(
 
           "nvidia_api_error"
         );
+      }
+
+      // SSE already started.
+      if (
+        !res.writableEnded
+      ) {
+
+        try {
+
+          res.write(
+            `data: ${JSON.stringify({
+
+              error: {
+
+                message:
+                  error.message ||
+                  "NVIDIA streaming error",
+
+                type:
+                  "stream_error"
+
+              }
+
+            })}\n\n`
+          );
+
+        } catch {
+          // Client disconnected.
+        }
+
+        res.end();
       }
     }
   }

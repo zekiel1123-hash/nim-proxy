@@ -1,6 +1,36 @@
 // ============================================================
 // NVIDIA NIM -> OpenAI-Compatible Streaming Proxy
 // ============================================================
+//
+// MODELS
+//
+// kimi-k3
+//   -> moonshotai/kimi-k3
+//
+// deepseek-v4-pro
+//   -> deepseek-ai/deepseek-v4-pro-0813
+//
+// deepseek-v4-flash
+//   -> deepseek-ai/deepseek-v4-flash-0731
+//
+// muse-glimmer-30b
+//   -> meta/muse-glimmer-30b
+//
+// nemotron-3-ultra
+//   -> nvidia/nemotron-3-ultra-550b-a55b
+//
+// gemma-4-31b
+//   -> google/gemma-4-31b-it
+//
+// deepseek-r1-32b-uncensored
+//   -> nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
+//   -> https://nim.api.nvidia.com/v1
+//
+// FALLBACK
+//
+// gemma-4-31b
+//
+// ============================================================
 
 const express = require("express");
 const cors = require("cors");
@@ -8,16 +38,7 @@ const axios = require("axios");
 
 const app = express();
 
-// ============================================================
-// SERVER
-// ============================================================
-
-const PORT =
-  process.env.PORT || 3000;
-
-// ============================================================
-// NVIDIA ENDPOINTS
-// ============================================================
+const PORT = process.env.PORT || 3000;
 
 const NIM_API_BASE =
   process.env.NIM_API_BASE ||
@@ -35,40 +56,33 @@ const NIM_API_KEY =
 // ============================================================
 
 const SHOW_REASONING =
-  String(
-    process.env.SHOW_REASONING || "true"
-  ).toLowerCase() === "true";
+  String(process.env.SHOW_REASONING || "true").toLowerCase() ===
+  "true";
 
 const DEFAULT_KIMI_REASONING =
-  process.env.KIMI_REASONING_EFFORT ||
-  "high";
+  process.env.KIMI_REASONING_EFFORT || "high";
 
 const DEFAULT_DEEPSEEK_REASONING =
-  process.env.DEEPSEEK_REASONING_EFFORT ||
-  "high";
+  process.env.DEEPSEEK_REASONING_EFFORT || "high";
 
 const DEFAULT_MUSE_REASONING =
-  process.env.MUSE_REASONING_EFFORT ||
-  "high";
+  process.env.MUSE_REASONING_EFFORT || "high";
 
 const DEFAULT_NEMOTRON_THINKING =
   String(
-    process.env.NEMOTRON_ENABLE_THINKING ||
-      "true"
+    process.env.NEMOTRON_ENABLE_THINKING || "true"
   ).toLowerCase() === "true";
 
 const DEFAULT_GEMMA_THINKING =
   String(
-    process.env.GEMMA_ENABLE_THINKING ||
-      "true"
+    process.env.GEMMA_ENABLE_THINKING || "true"
   ).toLowerCase() === "true";
 
 // ============================================================
 // FALLBACK
 // ============================================================
 
-const FALLBACK_MODEL =
-  "gemma-4-31b";
+const FALLBACK_MODEL = "gemma-4-31b";
 
 // ============================================================
 // MODEL DEFINITIONS
@@ -81,65 +95,31 @@ const MODELS = {
   // ==========================================================
 
   "kimi-k3": {
+    id: "kimi-k3",
+    upstream: "moonshotai/kimi-k3",
+    owner: "moonshotai",
 
-    id:
-      "kimi-k3",
+    multimodal: true,
 
-    upstream:
-      "moonshotai/kimi-k3",
+    contextWindow: 1048576,
+    maxTokens: 65536,
 
-    owner:
-      "moonshotai",
-
-    multimodal:
-      true,
-
-    contextWindow:
-      1048576,
-
-    maxTokens:
-      65536,
-
-    temperature:
-      1.0,
+    temperature: 1.0,
 
     reasoning: {
-
-      type:
-        "reasoning_effort",
-
-      allowed: [
-        "low",
-        "high",
-        "max"
-      ],
-
-      default:
-        DEFAULT_KIMI_REASONING
+      type: "reasoning_effort",
+      allowed: ["low", "high", "max"],
+      default: DEFAULT_KIMI_REASONING
     },
 
     supports: {
-
-      top_p:
-        false,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        true,
-
-      tools:
-        true,
-
-      stream_options:
-        true,
-
-      stop:
-        false
+      top_p: false,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: true,
+      tools: true,
+      stream_options: true,
+      stop: false
     }
   },
 
@@ -148,68 +128,32 @@ const MODELS = {
   // ==========================================================
 
   "deepseek-v4-pro": {
+    id: "deepseek-v4-pro",
+    upstream: "deepseek-ai/deepseek-v4-pro-0813",
+    owner: "deepseek-ai",
 
-    id:
-      "deepseek-v4-pro",
+    multimodal: false,
 
-    upstream:
-      "deepseek-ai/deepseek-v4-pro-0813",
+    contextWindow: 1000000,
+    maxTokens: 16384,
 
-    owner:
-      "deepseek-ai",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      1000000,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
+    temperature: 1.0,
+    top_p: 0.95,
 
     reasoning: {
-
-      type:
-        "reasoning_effort",
-
-      allowed: [
-        "low",
-        "high",
-        "max"
-      ],
-
-      default:
-        DEFAULT_DEEPSEEK_REASONING
+      type: "reasoning_effort",
+      allowed: ["low", "high", "max"],
+      default: DEFAULT_DEEPSEEK_REASONING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        true,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: true,
+      tools: true,
+      stream_options: false,
+      stop: false
     }
   },
 
@@ -218,68 +162,32 @@ const MODELS = {
   // ==========================================================
 
   "deepseek-v4-flash": {
+    id: "deepseek-v4-flash",
+    upstream: "deepseek-ai/deepseek-v4-flash-0731",
+    owner: "deepseek-ai",
 
-    id:
-      "deepseek-v4-flash",
+    multimodal: false,
 
-    upstream:
-      "deepseek-ai/deepseek-v4-flash-0731",
+    contextWindow: 1000000,
+    maxTokens: 16384,
 
-    owner:
-      "deepseek-ai",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      1000000,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
+    temperature: 1.0,
+    top_p: 0.95,
 
     reasoning: {
-
-      type:
-        "reasoning_effort",
-
-      allowed: [
-        "low",
-        "high",
-        "max"
-      ],
-
-      default:
-        DEFAULT_DEEPSEEK_REASONING
+      type: "reasoning_effort",
+      allowed: ["low", "high", "max"],
+      default: DEFAULT_DEEPSEEK_REASONING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        true,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: true,
+      tools: true,
+      stream_options: false,
+      stop: false
     }
   },
 
@@ -288,36 +196,20 @@ const MODELS = {
   // ==========================================================
 
   "muse-glimmer-30b": {
+    id: "muse-glimmer-30b",
+    upstream: "meta/muse-glimmer-30b",
+    owner: "meta",
 
-    id:
-      "muse-glimmer-30b",
+    multimodal: true,
 
-    upstream:
-      "meta/muse-glimmer-30b",
+    contextWindow: 131072,
+    maxTokens: 131072,
 
-    owner:
-      "meta",
-
-    multimodal:
-      true,
-
-    contextWindow:
-      131072,
-
-    maxTokens:
-      131072,
-
-    temperature:
-      0.95,
-
-    top_p:
-      1.0,
+    temperature: 0.95,
+    top_p: 1.0,
 
     reasoning: {
-
-      type:
-        "reasoning_effort",
-
+      type: "reasoning_effort",
       allowed: [
         "none",
         "minimal",
@@ -326,33 +218,17 @@ const MODELS = {
         "high",
         "max"
       ],
-
-      default:
-        DEFAULT_MUSE_REASONING
+      default: DEFAULT_MUSE_REASONING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        true,
-
-      frequency_penalty:
-        true,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        true
+      top_p: true,
+      presence_penalty: true,
+      frequency_penalty: true,
+      seed: false,
+      tools: true,
+      stream_options: false,
+      stop: true
     }
   },
 
@@ -361,62 +237,31 @@ const MODELS = {
   // ==========================================================
 
   "nemotron-3-ultra": {
+    id: "nemotron-3-ultra",
+    upstream: "nvidia/nemotron-3-ultra-550b-a55b",
+    owner: "nvidia",
 
-    id:
-      "nemotron-3-ultra",
+    multimodal: false,
 
-    upstream:
-      "nvidia/nemotron-3-ultra-550b-a55b",
+    contextWindow: 1000000,
+    maxTokens: 32768,
 
-    owner:
-      "nvidia",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      1000000,
-
-    maxTokens:
-      32768,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
+    temperature: 1.0,
+    top_p: 0.95,
 
     reasoning: {
-
-      type:
-        "chat_template_thinking",
-
-      default:
-        DEFAULT_NEMOTRON_THINKING
+      type: "chat_template_thinking",
+      default: DEFAULT_NEMOTRON_THINKING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        true
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: false,
+      tools: true,
+      stream_options: false,
+      stop: true
     }
   },
 
@@ -425,160 +270,126 @@ const MODELS = {
   // ==========================================================
 
   "gemma-4-31b": {
+    id: "gemma-4-31b",
+    upstream: "google/gemma-4-31b-it",
+    owner: "google",
 
-    id:
-      "gemma-4-31b",
+    multimodal: true,
 
-    upstream:
-      "google/gemma-4-31b-it",
+    contextWindow: 262144,
+    maxTokens: 16384,
 
-    owner:
-      "google",
-
-    multimodal:
-      true,
-
-    contextWindow:
-      262144,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
+    temperature: 1.0,
+    top_p: 0.95,
 
     reasoning: {
-
-      type:
-        "chat_template_thinking",
-
-      default:
-        DEFAULT_GEMMA_THINKING
+      type: "chat_template_thinking",
+      default: DEFAULT_GEMMA_THINKING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: false,
+      tools: true,
+      stream_options: false,
+      stop: false
     }
   },
 
   // ==========================================================
-  // COMMUNITY:
-  // nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
+  // COMMUNITY DEEPSEEK R1 DISTILL 32B UNCENSORED
+  // ==========================================================
+  //
+  // This is intentionally handled by the SAME standard
+  // streaming code as the other DeepSeek models.
+  //
+  // The only differences are:
+  //
+  //   endpoint:
+  //     https://nim.api.nvidia.com/v1
+  //
+  //   model:
+  //     nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
+  //
+  //   defaults:
+  //     temperature = 0.5
+  //     top_p       = 1.0
+  //     max_tokens  = 1024
+  //
+  // No reasoning_effort.
+  // No chat_template_kwargs.
+  // No tools.
+  //
   // ==========================================================
 
   "deepseek-r1-32b-uncensored": {
-
-    id:
-      "deepseek-r1-32b-uncensored",
+    id: "deepseek-r1-32b-uncensored",
 
     upstream:
       "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored",
 
-    owner:
-      "nicoboss",
+    owner: "nicoboss",
 
     apiBase:
       COMMUNITY_NIM_API_BASE,
 
-    multimodal:
-      false,
+    multimodal: false,
 
-    contextWindow:
-      131072,
+    contextWindow: 131072,
 
-    maxTokens:
-      32768,
+    // Maximum allowed by the proxy.
+    maxTokens: 32768,
 
-    temperature:
-      0.5,
+    // Exact default used by the known-working request.
+    defaultMaxTokens: 1024,
 
-    top_p:
-      1.0,
+    temperature: 0.5,
+    top_p: 1.0,
 
-    community:
-      true,
+    // This model does not receive reasoning_effort
+    // or chat_template_kwargs.
+    reasoning: {
+      type: "none"
+    },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        false,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: false,
+      tools: false,
+      stream_options: false,
+      stop: false
     }
   }
 };
 
 // ============================================================
-// MIDDLEWARE
+// EXPRESS MIDDLEWARE
 // ============================================================
 
-app.use(
-  cors()
-);
+app.use(cors());
 
 app.use(
   express.json({
-    limit:
-      "100mb"
+    limit: "100mb"
   })
 );
 
 app.use(
   express.urlencoded({
-    limit:
-      "100mb",
-    extended:
-      true
+    limit: "100mb",
+    extended: true
   })
 );
 
 // ============================================================
-// HELPERS
+// MODEL LOOKUP
 // ============================================================
 
-function getModel(
-  modelName
-) {
-
+function getModel(modelName) {
   if (
     modelName &&
     MODELS[modelName]
@@ -590,42 +401,50 @@ function getModel(
 }
 
 // ============================================================
+// THINK TAG CLEANUP
+// ============================================================
+
+function stripThinkTags(text) {
+  if (
+    typeof text !== "string"
+  ) {
+    return text;
+  }
+
+  return text
+    .replace(
+      /<think>[\s\S]*?<\/think>/gi,
+      ""
+    )
+    .replace(
+      /<\/?think>/gi,
+      ""
+    );
+}
+
+// ============================================================
 // MEDIA DETECTION
 // ============================================================
 
-function containsMedia(
-  messages
-) {
-
-  if (
-    !Array.isArray(messages)
-  ) {
+function containsMedia(messages) {
+  if (!Array.isArray(messages)) {
     return false;
   }
 
-  for (
-    const message of messages
-  ) {
+  for (const message of messages) {
 
     if (
-      !Array.isArray(
-        message?.content
-      )
+      !Array.isArray(message?.content)
     ) {
       continue;
     }
 
-    for (
-      const part of message.content
-    ) {
+    for (const part of message.content) {
 
       if (
-        part?.type ===
-          "image_url" ||
-        part?.type ===
-          "video_url"
+        part?.type === "image_url" ||
+        part?.type === "video_url"
       ) {
-
         return true;
       }
     }
@@ -638,21 +457,13 @@ function containsMedia(
 // MESSAGE VALIDATION
 // ============================================================
 
-function validateMessages(
-  messages
-) {
+function validateMessages(messages) {
 
-  if (
-    !Array.isArray(messages)
-  ) {
-
+  if (!Array.isArray(messages)) {
     return "messages must be an array";
   }
 
-  if (
-    messages.length === 0
-  ) {
-
+  if (messages.length === 0) {
     return "messages cannot be empty";
   }
 
@@ -662,37 +473,25 @@ function validateMessages(
     i++
   ) {
 
-    const message =
-      messages[i];
+    const message = messages[i];
 
     if (
       !message ||
-      typeof message !==
-        "object"
+      typeof message !== "object"
     ) {
-
-      return (
-        `messages[${i}] must be an object`
-      );
+      return `messages[${i}] must be an object`;
     }
 
     if (
-      typeof message.role !==
-        "string"
+      typeof message.role !== "string"
     ) {
-
-      return (
-        `messages[${i}].role must be a string`
-      );
+      return `messages[${i}].role must be a string`;
     }
 
     if (
-      message.content ===
-        undefined &&
-      message.tool_calls ===
-        undefined
+      message.content === undefined &&
+      message.tool_calls === undefined
     ) {
-
       return (
         `messages[${i}] must contain content or tool_calls`
       );
@@ -700,32 +499,6 @@ function validateMessages(
   }
 
   return null;
-}
-
-// ============================================================
-// THINK TAG CLEANUP
-// ============================================================
-
-function stripThinkTags(
-  text
-) {
-
-  if (
-    typeof text !==
-      "string"
-  ) {
-
-    return text;
-  }
-
-  return text
-    .replace(
-      /<think>[\s\S]*?<\/think>/gi,
-      ""
-    )
-    .replace(
-      /<\/?think>/gi,
-      "");
 }
 
 // ============================================================
@@ -738,10 +511,9 @@ function getReasoningEffort(
 ) {
 
   if (
-    model.reasoning?.type !==
-      "reasoning_effort"
+    model.reasoning.type !==
+    "reasoning_effort"
   ) {
-
     return null;
   }
 
@@ -754,15 +526,69 @@ function getReasoningEffort(
       requested
     )
   ) {
-
     return requested;
   }
+
+  console.warn(
+    `[Reasoning] Invalid reasoning_effort "${requested}" ` +
+    `for ${model.id}; using ${model.reasoning.default}`
+  );
 
   return model.reasoning.default;
 }
 
 // ============================================================
-// BUILD STANDARD NVIDIA REQUEST
+// MAX TOKEN VALUE
+// ============================================================
+
+function getMaxTokens(
+  body,
+  model
+) {
+
+  let maxTokens =
+    body.max_tokens;
+
+  if (
+    maxTokens === undefined ||
+    maxTokens === null
+  ) {
+    maxTokens =
+      model.defaultMaxTokens ??
+      model.maxTokens;
+  }
+
+  maxTokens =
+    Number(maxTokens);
+
+  if (
+    !Number.isFinite(maxTokens)
+  ) {
+    maxTokens =
+      model.defaultMaxTokens ??
+      model.maxTokens;
+  }
+
+  maxTokens =
+    Math.floor(maxTokens);
+
+  if (maxTokens < 1) {
+    maxTokens = 1;
+  }
+
+  if (
+    maxTokens >
+    model.maxTokens
+  ) {
+    maxTokens =
+      model.maxTokens;
+  }
+
+  return maxTokens;
+}
+
+// ============================================================
+// BUILD NVIDIA REQUEST
 // ============================================================
 
 function buildNvidiaRequest(
@@ -771,15 +597,12 @@ function buildNvidiaRequest(
 ) {
 
   const request = {
-
-    model:
-      model.upstream,
+    model: model.upstream,
 
     messages:
       body.messages,
 
-    stream:
-      true
+    stream: true
   };
 
   // ==========================================================
@@ -787,15 +610,11 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    body.temperature !==
-      undefined
+    body.temperature !== undefined
   ) {
-
     request.temperature =
       body.temperature;
-
   } else {
-
     request.temperature =
       model.temperature;
   }
@@ -805,22 +624,17 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports?.top_p
+    model.supports.top_p
   ) {
 
     if (
-      body.top_p !==
-        undefined
+      body.top_p !== undefined
     ) {
-
       request.top_p =
         body.top_p;
-
     } else if (
-      model.top_p !==
-        undefined
+      model.top_p !== undefined
     ) {
-
       request.top_p =
         model.top_p;
     }
@@ -830,70 +644,20 @@ function buildNvidiaRequest(
   // MAX TOKENS
   // ==========================================================
 
-  let maxTokens =
-    body.max_tokens;
-
-  if (
-    maxTokens ===
-      undefined ||
-    maxTokens ===
-      null
-  ) {
-
-    maxTokens =
-      16384;
-  }
-
-  maxTokens =
-    Number(
-      maxTokens
-    );
-
-  if (
-    !Number.isFinite(
-      maxTokens
-    )
-  ) {
-
-    maxTokens =
-      16384;
-  }
-
-  maxTokens =
-    Math.floor(
-      maxTokens
-    );
-
-  if (
-    maxTokens < 1
-  ) {
-
-    maxTokens =
-      1;
-  }
-
-  if (
-    maxTokens >
-      model.maxTokens
-  ) {
-
-    maxTokens =
-      model.maxTokens;
-  }
-
   request.max_tokens =
-    maxTokens;
+    getMaxTokens(
+      body,
+      model
+    );
 
   // ==========================================================
   // SEED
   // ==========================================================
 
   if (
-    model.supports?.seed &&
-    body.seed !==
-      undefined
+    model.supports.seed &&
+    body.seed !== undefined
   ) {
-
     request.seed =
       body.seed;
   }
@@ -903,11 +667,9 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports?.stop &&
-    body.stop !==
-      undefined
+    model.supports.stop &&
+    body.stop !== undefined
   ) {
-
     request.stop =
       body.stop;
   }
@@ -917,21 +679,17 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports?.tools &&
-    body.tools !==
-      undefined
+    model.supports.tools &&
+    body.tools !== undefined
   ) {
-
     request.tools =
       body.tools;
   }
 
   if (
-    model.supports?.tools &&
-    body.tool_choice !==
-      undefined
+    model.supports.tools &&
+    body.tool_choice !== undefined
   ) {
-
     request.tool_choice =
       body.tool_choice;
   }
@@ -941,11 +699,9 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports?.stream_options &&
-    body.stream_options !==
-      undefined
+    model.supports.stream_options &&
+    body.stream_options !== undefined
   ) {
-
     request.stream_options =
       body.stream_options;
   }
@@ -955,11 +711,9 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports?.presence_penalty &&
-    body.presence_penalty !==
-      undefined
+    model.supports.presence_penalty &&
+    body.presence_penalty !== undefined
   ) {
-
     request.presence_penalty =
       body.presence_penalty;
   }
@@ -969,22 +723,20 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.supports?.frequency_penalty &&
-    body.frequency_penalty !==
-      undefined
+    model.supports.frequency_penalty &&
+    body.frequency_penalty !== undefined
   ) {
-
     request.frequency_penalty =
       body.frequency_penalty;
   }
 
   // ==========================================================
-  // KIMI
+  // MODEL-SPECIFIC REASONING
   // ==========================================================
 
   if (
-    model.id ===
-      "kimi-k3"
+    model.reasoning.type ===
+    "reasoning_effort"
   ) {
 
     request.reasoning_effort =
@@ -998,18 +750,10 @@ function buildNvidiaRequest(
   // DEEPSEEK V4
   // ==========================================================
 
-  else if (
-    model.id ===
-      "deepseek-v4-pro" ||
-    model.id ===
-      "deepseek-v4-flash"
+  if (
+    model.id === "deepseek-v4-pro" ||
+    model.id === "deepseek-v4-flash"
   ) {
-
-    request.reasoning_effort =
-      getReasoningEffort(
-        body,
-        model
-      );
 
     if (
       body.chat_template_kwargs &&
@@ -1023,19 +767,12 @@ function buildNvidiaRequest(
   }
 
   // ==========================================================
-  // MUSE
+  // MUSE GLIMMER
   // ==========================================================
 
-  else if (
-    model.id ===
-      "muse-glimmer-30b"
+  if (
+    model.id === "muse-glimmer-30b"
   ) {
-
-    request.reasoning_effort =
-      getReasoningEffort(
-        body,
-        model
-      );
 
     if (
       body.chat_template_kwargs &&
@@ -1049,206 +786,166 @@ function buildNvidiaRequest(
   }
 
   // ==========================================================
-  // NEMOTRON
+  // NEMOTRON 3 ULTRA
   // ==========================================================
 
-  else if (
-    model.id ===
-      "nemotron-3-ultra"
+  if (
+    model.id === "nemotron-3-ultra"
   ) {
 
     request.chat_template_kwargs = {
-
-      ...(body.chat_template_kwargs ||
-        {}),
+      ...(body.chat_template_kwargs || {}),
 
       enable_thinking:
-        body
-          .chat_template_kwargs
+        body.chat_template_kwargs
           ?.enable_thinking ??
-        DEFAULT_NEMOTRON_THINKING
+        model.reasoning.default
     };
   }
 
   // ==========================================================
-  // GEMMA
+  // GEMMA 4 31B
   // ==========================================================
 
-  else if (
-    model.id ===
-      "gemma-4-31b"
+  if (
+    model.id === "gemma-4-31b"
   ) {
 
     request.chat_template_kwargs = {
-
-      ...(body.chat_template_kwargs ||
-        {}),
+      ...(body.chat_template_kwargs || {}),
 
       enable_thinking:
-        body
-          .chat_template_kwargs
+        body.chat_template_kwargs
           ?.enable_thinking ??
-        DEFAULT_GEMMA_THINKING
+        model.reasoning.default
     };
   }
+
+  // ==========================================================
+  // COMMUNITY DEEPSEEK
+  // ==========================================================
+  //
+  // Nothing is added here.
+  //
+  // It is deliberately treated like a normal
+  // OpenAI-compatible DeepSeek model.
+  //
+  // No reasoning_effort.
+  // No chat_template_kwargs.
+  // No tools.
+  //
+  // ==========================================================
 
   return request;
 }
 
 // ============================================================
-// COMMUNITY REQUEST
-// ============================================================
-
-function buildCommunityRequest(
-  body
-) {
-
-  return {
-
-    model:
-      "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored",
-
-    messages:
-      body.messages,
-
-    temperature:
-      body.temperature !==
-      undefined
-        ? body.temperature
-        : 0.5,
-
-    top_p:
-      body.top_p !==
-      undefined
-        ? body.top_p
-        : 1,
-
-    max_tokens:
-      body.max_tokens !==
-      undefined
-        ? body.max_tokens
-        : 1024,
-
-    stream:
-      true
-  };
-}
-
-// ============================================================
-// ERROR EXTRACTION
+// ERROR MESSAGE EXTRACTION
 // ============================================================
 
 function extractErrorMessage(
-  data
+  responseData
 ) {
 
   if (
-    typeof data ===
-      "string"
+    typeof responseData === "string"
   ) {
-
-    return data;
+    return responseData;
   }
 
   if (
-    data?.error?.message
+    responseData?.error?.message
   ) {
-
-    return data.error.message;
+    return responseData.error.message;
   }
 
   if (
-    typeof data?.error ===
-      "string"
+    typeof responseData?.error ===
+    "string"
   ) {
-
-    return data.error;
+    return responseData.error;
   }
 
   if (
-    data?.message
+    responseData?.message
   ) {
-
-    return data.message;
+    return responseData.message;
   }
 
   try {
-
     return JSON.stringify(
-      data
+      responseData
     );
-
   } catch {
-
     return "NVIDIA API request failed";
   }
 }
 
 // ============================================================
-// OPENAI ERROR
+// OPENAI ERROR RESPONSE
 // ============================================================
 
 function sendOpenAIError(
   res,
   status,
   message,
-  code
+  code = "nvidia_api_error"
 ) {
 
-  if (
-    res.headersSent
-  ) {
-
+  if (res.headersSent) {
     return;
   }
 
   res
     .status(status)
     .json({
-
       error: {
-
         message,
-
-        type:
-          "invalid_request_error",
-
-        code:
-          code ||
-          "nvidia_api_error"
+        type: "invalid_request_error",
+        code
       }
     });
 }
 
 // ============================================================
-// AXIOS CONFIG
+// AXIOS REQUEST
 // ============================================================
 
-function getAxiosConfig() {
+async function sendNvidiaRequest(
+  model,
+  request
+) {
 
-  return {
+  const endpoint =
+    `${model.apiBase || NIM_API_BASE}/chat/completions`;
 
-    headers: {
+  return axios.post(
+    endpoint,
+    request,
+    {
+      headers: {
+        Authorization:
+          `Bearer ${NIM_API_KEY}`,
 
-      Authorization:
-        `Bearer ${NIM_API_KEY}`,
+        "Content-Type":
+          "application/json",
 
-      "Content-Type":
-        "application/json",
+        Accept:
+          "text/event-stream"
+      },
 
-      Accept:
-        "text/event-stream"
-    },
+      responseType:
+        "stream",
 
-    responseType:
-      "stream",
+      // Long-running reasoning models can take
+      // a while to produce their first token.
+      timeout: 0,
 
-    timeout:
-      0,
-
-    validateStatus:
-      () => true
-  };
+      // We handle HTTP status codes ourselves.
+      validateStatus:
+        () => true
+    }
+  );
 }
 
 // ============================================================
@@ -1259,8 +956,7 @@ async function readErrorStream(
   stream
 ) {
 
-  let text =
-    "";
+  let text = "";
 
   try {
 
@@ -1269,1320 +965,127 @@ async function readErrorStream(
     ) {
 
       text +=
-        chunk.toString(
-          "utf8"
-        );
+        chunk.toString("utf8");
 
       if (
-        text.length >=
+        text.length >
         100000
       ) {
-
         break;
       }
     }
 
   } catch {
-    // Ignore secondary stream errors.
+    // Ignore stream read errors.
   }
 
-  return text;
+  let parsed = text;
+
+  try {
+    parsed =
+      JSON.parse(text);
+  } catch {
+    // Keep text.
+  }
+
+  return extractErrorMessage(
+    parsed
+  );
 }
 
 // ============================================================
-// SSE HEADERS
+// HEALTH
 // ============================================================
 
-function prepareSSE(
-  res
-) {
+app.get(
+  "/health",
+  (req, res) => {
 
-  res.status(
-    200
-  );
+    res.json({
+      status: "ok",
 
-  res.setHeader(
-    "Content-Type",
-    "text/event-stream; charset=utf-8"
-  );
+      streaming: true,
 
-  res.setHeader(
-    "Cache-Control",
-    "no-cache, no-transform"
-  );
+      api_base:
+        NIM_API_BASE,
 
-  res.setHeader(
-    "Connection",
-    "keep-alive"
-  );
+      community_api_base:
+        COMMUNITY_NIM_API_BASE,
 
-  res.setHeader(
-    "X-Accel-Buffering",
-    "no"
-  );
+      fallback_model:
+        FALLBACK_MODEL,
 
-  if (
-    typeof res.flushHeaders ===
-      "function"
-  ) {
+      reasoning_display:
+        SHOW_REASONING,
 
-    res.flushHeaders();
-  }
-}
+      models:
+        Object.values(MODELS).map(
+          model => ({
+            id:
+              model.id,
 
-// ============================================================
-// COMMUNITY STREAM
-//
-// IMPORTANT FIX:
-//
-// The community endpoint can send:
-//
-//   delta: {
-//     role: "assistant",
-//     content: ""
-//   }
-//
-// and then immediately close.
-//
-// We DO NOT send this empty initial chunk to Janitor.
-//
-// We wait until actual generated content/reasoning arrives.
-//
-// If upstream closes without generated content, this function
-// rejects with "no_generated_content" BEFORE SSE headers are
-// sent. The caller can then use the fallback model.
-//
-// This prevents Janitor AI from receiving a successful SSE
-// response containing no assistant output.
-// ============================================================
+            upstream:
+              model.upstream,
 
-async function handleCommunityStream(
-  req,
-  res,
-  body
-) {
+            multimodal:
+              model.multimodal,
 
-  const request =
-    buildCommunityRequest(
-      body
-    );
+            context_window:
+              model.contextWindow,
 
-  const endpoint =
-    `${COMMUNITY_NIM_API_BASE}/chat/completions`;
-
-  console.log(
-    `[Community Request] ${request.model} [STREAMING]`
-  );
-
-  console.log(
-    `[Community Endpoint] ${endpoint}`
-  );
-
-  console.log(
-    `[Community Config] ` +
-    `temperature=${request.temperature} ` +
-    `top_p=${request.top_p} ` +
-    `max_tokens=${request.max_tokens} ` +
-    `stream=true`
-  );
-
-  console.log(
-    "[Community Request Body]",
-    JSON.stringify(
-      request,
-      null,
-      2
-    )
-  );
-
-  let upstream;
-
-  try {
-
-    upstream =
-      await axios.post(
-        endpoint,
-        request,
-        getAxiosConfig()
-      );
-
-  } catch (
-    error
-  ) {
-
-    console.error(
-      "[Community Connection Error]",
-      error.code ||
-      error.message
-    );
-
-    throw new Error(
-      error.message ||
-      "Community NVIDIA endpoint connection failed"
-    );
-  }
-
-  // ==========================================================
-  // HTTP ERROR
-  // ==========================================================
-
-  if (
-    upstream.status <
-      200 ||
-    upstream.status >=
-      300
-  ) {
-
-    const errorText =
-      await readErrorStream(
-        upstream.data
-      );
-
-    let parsed =
-      errorText;
-
-    try {
-
-      parsed =
-        JSON.parse(
-          errorText
-        );
-
-    } catch {
-      // Keep raw text.
-    }
-
-    const message =
-      extractErrorMessage(
-        parsed
-      );
-
-    console.error(
-      `[Community HTTP ${upstream.status}] ${message}`
-    );
-
-    const error =
-      new Error(
-        message
-      );
-
-    error.status =
-      upstream.status;
-
-    throw error;
-  }
-
-  // ==========================================================
-  // STATE
-  // ==========================================================
-
-  let buffer =
-    "";
-
-  let finished =
-    false;
-
-  let clientClosed =
-    false;
-
-  let receivedContent =
-    false;
-
-  let receivedReasoning =
-    false;
-
-  let receivedAnythingUseful =
-    false;
-
-  let started =
-    false;
-
-  // ==========================================================
-  // CLEANUP
-  // ==========================================================
-
-  const destroyUpstream =
-    () => {
-
-      if (
-        upstream?.data &&
-        !upstream.data.destroyed
-      ) {
-
-        upstream.data.destroy();
-      }
-    };
-
-  // ==========================================================
-  // CLIENT DISCONNECT
-  // ==========================================================
-
-  const onClientClose =
-    () => {
-
-      if (
-        res.writableEnded
-      ) {
-
-        return;
-      }
-
-      clientClosed =
-        true;
-
-      console.log(
-        "[Community Stream] Client disconnected."
-      );
-
-      destroyUpstream();
-    };
-
-  req.once(
-    "close",
-    onClientClose
-  );
-
-  // ==========================================================
-  // FINISH
-  // ==========================================================
-
-  function finish() {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    finished =
-      true;
-
-    console.log(
-      `[Community Stream] Finished. ` +
-      `content=${receivedContent} ` +
-      `reasoning=${receivedReasoning} ` +
-      `useful=${receivedAnythingUseful} ` +
-      `started=${started}`
-    );
-
-    if (
-      !res.headersSent
-    ) {
-
-      return;
-    }
-
-    if (
-      res.writableEnded
-    ) {
-
-      return;
-    }
-
-    try {
-
-      res.write(
-        "data: [DONE]\n\n"
-      );
-
-    } catch {
-      // Client disconnected.
-    }
-
-    if (
-      !res.writableEnded
-    ) {
-
-      res.end();
-    }
-  }
-
-  // ==========================================================
-  // SEND ACTUAL CONTENT
-  // ==========================================================
-
-  function sendCommunityChunk(
-    data
-  ) {
-
-    if (
-      clientClosed ||
-      res.writableEnded ||
-      finished
-    ) {
-
-      return;
-    }
-
-    const choices =
-      Array.isArray(
-        data?.choices
-      )
-        ? data.choices
-        : [];
-
-    let hasContent =
-      false;
-
-    let hasReasoning =
-      false;
-
-    for (
-      const choice of choices
-    ) {
-
-      const delta =
-        choice?.delta;
-
-      if (
-        !delta
-      ) {
-
-        continue;
-      }
-
-      if (
-        typeof delta.content ===
-          "string" &&
-        delta.content.length >
-          0
-      ) {
-
-        hasContent =
-          true;
-      }
-
-      if (
-        typeof delta.reasoning_content ===
-          "string" &&
-        delta.reasoning_content.length >
-          0
-      ) {
-
-        hasReasoning =
-          true;
-      }
-
-      if (
-        typeof delta.reasoning ===
-          "string" &&
-        delta.reasoning.length >
-          0
-      ) {
-
-        hasReasoning =
-          true;
-      }
-    }
-
-    // --------------------------------------------------------
-    // EMPTY ROLE CHUNK
-    //
-    // Do NOT send it to Janitor.
-    // --------------------------------------------------------
-
-    if (
-      !hasContent &&
-      !hasReasoning
-    ) {
-
-      console.log(
-        "[Community Stream] Ignoring empty upstream chunk."
-      );
-
-      return;
-    }
-
-    receivedAnythingUseful =
-      true;
-
-    if (
-      hasContent
-    ) {
-
-      receivedContent =
-        true;
-    }
-
-    if (
-      hasReasoning
-    ) {
-
-      receivedReasoning =
-        true;
-    }
-
-    // --------------------------------------------------------
-    // First actual output.
-    //
-    // Only NOW send SSE headers.
-    // --------------------------------------------------------
-
-    if (
-      !started
-    ) {
-
-      prepareSSE(
-        res
-      );
-
-      started =
-        true;
-
-      console.log(
-        "[Community Stream] First generated output received. SSE started."
-      );
-    }
-
-    // --------------------------------------------------------
-    // Clean think tags from normal content.
-    // --------------------------------------------------------
-
-    for (
-      const choice of choices
-    ) {
-
-      if (
-        !choice?.delta
-      ) {
-
-        continue;
-      }
-
-      if (
-        typeof choice.delta.content ===
-          "string"
-      ) {
-
-        choice.delta.content =
-          stripThinkTags(
-            choice.delta.content
-          );
-      }
-
-      if (
-        !SHOW_REASONING
-      ) {
-
-        delete choice.delta.reasoning;
-
-        delete choice.delta.reasoning_content;
-      }
-    }
-
-    try {
-
-      res.write(
-        `data: ${JSON.stringify(data)}\n\n`
-      );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[Community Client SSE Error]",
-        error.message
-      );
-
-      clientClosed =
-        true;
-
-      destroyUpstream();
-    }
-  }
-
-  // ==========================================================
-  // PROCESS SSE LINE
-  // ==========================================================
-
-  function processLine(
-    line
-  ) {
-
-    line =
-      line.replace(
-        /\r$/,
-        ""
-      );
-
-    if (
-      !line.trim()
-    ) {
-
-      return;
-    }
-
-    if (
-      line.startsWith(":")
-    ) {
-
-      return;
-    }
-
-    if (
-      !line.startsWith(
-        "data:"
-      )
-    ) {
-
-      return;
-    }
-
-    const raw =
-      line
-        .slice(5)
-        .trim();
-
-    if (
-      raw ===
-      "[DONE]"
-    ) {
-
-      console.log(
-        "[Community Stream] Received [DONE]."
-      );
-
-      if (
-        receivedAnythingUseful
-      ) {
-
-        finish();
-
-      } else {
-
-        console.warn(
-          "[Community Stream] Received [DONE] without generated content."
-        );
-
-        finished =
-          true;
-
-        destroyUpstream();
-
-        const error =
-          new Error(
-            "Community model returned no generated content."
-          );
-
-        error.code =
-          "no_generated_content";
-
-        throw error;
-      }
-
-      return;
-    }
-
-    let parsed;
-
-    try {
-
-      parsed =
-        JSON.parse(
-          raw
-        );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[Community SSE Parse Error]",
-        error.message
-      );
-
-      return;
-    }
-
-    console.log(
-      "[Community Stream Chunk]",
-      Buffer.byteLength(
-        line,
-        "utf8"
-      ),
-      "bytes"
-    );
-
-    console.log(
-      "[Community Stream Data]",
-      line
-    );
-
-    sendCommunityChunk(
-      parsed
-    );
-  }
-
-  // ==========================================================
-  // STREAM PROCESSING
-  // ==========================================================
-
-  try {
-
-    for await (
-      const chunk of
-      upstream.data
-    ) {
-
-      if (
-        clientClosed
-      ) {
-
-        break;
-      }
-
-      buffer +=
-        chunk.toString(
-          "utf8"
-        );
-
-      const lines =
-        buffer.split(
-          "\n"
-        );
-
-      buffer =
-        lines.pop() ||
-        "";
-
-      for (
-        const line of
-        lines
-      ) {
-
-        if (
-          clientClosed
-        ) {
-
-          break;
-        }
-
-        processLine(
-          line
-        );
-      }
-    }
-
-  } catch (
-    error
-  ) {
-
-    if (
-      clientClosed
-    ) {
-
-      return;
-    }
-
-    console.error(
-      "[Community Stream Error]",
-      error.code ||
-      error.message
-    );
-
-    if (
-      receivedAnythingUseful
-    ) {
-
-      if (
-        !res.writableEnded
-      ) {
-
-        try {
-
-          res.write(
-            `data: ${JSON.stringify({
-
-              error: {
-
-                message:
-                  error.message ||
-                  "Community NVIDIA streaming error",
-
-                type:
-                  "stream_error"
-              }
-
-            })}\n\n`
-          );
-
-        } catch {
-          // Client disconnected.
-        }
-
-        if (
-          !res.writableEnded
-        ) {
-
-          res.end();
-        }
-      }
-
-      return;
-    }
-
-    throw error;
-  }
-
-  // ==========================================================
-  // PROCESS FINAL PARTIAL LINE
-  // ==========================================================
-
-  if (
-    buffer.trim() &&
-    !clientClosed
-  ) {
-
-    try {
-
-      processLine(
-        buffer
-      );
-
-    } catch (
-      error
-    ) {
-
-      if (
-        error.code ===
-        "no_generated_content"
-      ) {
-
-        throw error;
-      }
-
-      console.error(
-        "[Community Final Line Error]",
-        error.message
-      );
-    }
-  }
-
-  // ==========================================================
-  // UPSTREAM CLOSED
-  // ==========================================================
-
-  console.log(
-    "[Community Stream] NVIDIA upstream ended."
-  );
-
-  console.log(
-    `[Community Stream] ` +
-    `receivedContent=${receivedContent} ` +
-    `receivedReasoning=${receivedReasoning} ` +
-    `started=${started}`
-  );
-
-  // ----------------------------------------------------------
-  // CRITICAL:
-  //
-  // Upstream closed without actual output.
-  // Do NOT send anything to Janitor.
-  // Throw so caller can fallback.
-  // ----------------------------------------------------------
-
-  if (
-    !receivedAnythingUseful
-  ) {
-
-    console.warn(
-      "[Community Stream] NVIDIA closed without generated content."
-    );
-
-    console.warn(
-      "[Community Stream] Falling back BEFORE sending SSE headers."
-    );
-
-    const error =
-      new Error(
-        "Community model returned no generated content."
-      );
-
-    error.code =
-      "no_generated_content";
-
-    throw error;
-  }
-
-  // ----------------------------------------------------------
-  // We already started the stream.
-  // Send DONE ourselves because some community responses
-  // close without [DONE].
-  // ----------------------------------------------------------
-
-  finish();
-}
-
-// ============================================================
-// STANDARD NIM STREAM
-// ============================================================
-
-async function handleStandardStream(
-  req,
-  res,
-  body,
-  model
-) {
-
-  const request =
-    buildNvidiaRequest(
-      body,
-      model
-    );
-
-  const endpoint =
-    `${NIM_API_BASE}/chat/completions`;
-
-  console.log(
-    `[Request] ${model.id} -> ${model.upstream} [STREAMING]`
-  );
-
-  console.log(
-    `[Endpoint] ${endpoint}`
-  );
-
-  console.log(
-    `[Request Config] ` +
-    `temperature=${request.temperature} ` +
-    `top_p=${request.top_p ?? "default"} ` +
-    `max_tokens=${request.max_tokens} ` +
-    `reasoning_effort=${request.reasoning_effort ?? "not-sent"}`
-  );
-
-  let upstream;
-
-  try {
-
-    upstream =
-      await axios.post(
-        endpoint,
-        request,
-        getAxiosConfig()
-      );
-
-  } catch (
-    error
-  ) {
-
-    console.error(
-      "[NVIDIA Connection Error]",
-      error.code ||
-      error.message
-    );
-
-    throw error;
-  }
-
-  // ==========================================================
-  // HTTP ERROR
-  // ==========================================================
-
-  if (
-    upstream.status <
-      200 ||
-    upstream.status >=
-      300
-  ) {
-
-    const errorText =
-      await readErrorStream(
-        upstream.data
-      );
-
-    let parsed =
-      errorText;
-
-    try {
-
-      parsed =
-        JSON.parse(
-          errorText
-        );
-
-    } catch {
-      // Keep text.
-    }
-
-    const message =
-      extractErrorMessage(
-        parsed
-      );
-
-    const error =
-      new Error(
-        message
-      );
-
-    error.status =
-      upstream.status;
-
-    throw error;
-  }
-
-  prepareSSE(
-    res
-  );
-
-  let buffer =
-    "";
-
-  let finished =
-    false;
-
-  let clientClosed =
-    false;
-
-  function finish() {
-
-    if (
-      finished
-    ) {
-
-      return;
-    }
-
-    finished =
-      true;
-
-    if (
-      !res.writableEnded
-    ) {
-
-      try {
-
-        res.write(
-          "data: [DONE]\n\n"
-        );
-
-      } catch {
-        // Client disconnected.
-      }
-
-      if (
-        !res.writableEnded
-      ) {
-
-        res.end();
-      }
-    }
-  }
-
-  function sendChunk(
-    data
-  ) {
-
-    if (
-      finished ||
-      res.writableEnded ||
-      clientClosed
-    ) {
-
-      return;
-    }
-
-    try {
-
-      if (
-        Array.isArray(
-          data?.choices
+            max_tokens:
+              model.maxTokens
+          })
         )
-      ) {
-
-        for (
-          const choice of
-          data.choices
-        ) {
-
-          if (
-            !choice?.delta
-          ) {
-
-            continue;
-          }
-
-          if (
-            typeof choice.delta.content ===
-              "string"
-          ) {
-
-            choice.delta.content =
-              stripThinkTags(
-                choice.delta.content
-              );
-          }
-
-          if (
-            !SHOW_REASONING
-          ) {
-
-            delete choice.delta.reasoning;
-
-            delete choice.delta.reasoning_content;
-          }
-        }
-      }
-
-      res.write(
-        `data: ${JSON.stringify(data)}\n\n`
-      );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[SSE Write Error]",
-        error.message
-      );
-
-      clientClosed =
-        true;
-
-      if (
-        !upstream.data.destroyed
-      ) {
-
-        upstream.data.destroy();
-      }
-    }
+    });
   }
-
-  function processLine(
-    line
-  ) {
-
-    line =
-      line.replace(
-        /\r$/,
-        ""
-      );
-
-    if (
-      !line.trim()
-    ) {
-
-      return;
-    }
-
-    if (
-      line.startsWith(":")
-    ) {
-
-      return;
-    }
-
-    if (
-      !line.startsWith(
-        "data:"
-      )
-    ) {
-
-      return;
-    }
-
-    const raw =
-      line
-        .slice(5)
-        .trim();
-
-    if (
-      raw ===
-      "[DONE]"
-    ) {
-
-      finish();
-
-      return;
-    }
-
-    let parsed;
-
-    try {
-
-      parsed =
-        JSON.parse(
-          raw
-        );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "[SSE Parse Error]",
-        error.message
-      );
-
-      return;
-    }
-
-    sendChunk(
-      parsed
-    );
-  }
-
-  req.once(
-    "close",
-    () => {
-
-      if (
-        finished
-      ) {
-
-        return;
-      }
-
-      clientClosed =
-        true;
-
-      if (
-        upstream?.data &&
-        !upstream.data.destroyed
-      ) {
-
-        upstream.data.destroy();
-      }
-    }
-  );
-
-  upstream.data.on(
-    "data",
-    chunk => {
-
-      if (
-        finished ||
-        clientClosed
-      ) {
-
-        return;
-      }
-
-      buffer +=
-        chunk.toString(
-          "utf8"
-        );
-
-      const lines =
-        buffer.split(
-          "\n"
-        );
-
-      buffer =
-        lines.pop() ||
-        "";
-
-      for (
-        const line of
-        lines
-      ) {
-
-        if (
-          finished ||
-          clientClosed
-        ) {
-
-          break;
-        }
-
-        processLine(
-          line
-        );
-      }
-    }
-  );
-
-  upstream.data.on(
-    "end",
-    () => {
-
-      if (
-        finished ||
-        clientClosed
-      ) {
-
-        return;
-      }
-
-      if (
-        buffer.trim()
-      ) {
-
-        processLine(
-          buffer
-        );
-      }
-
-      finish();
-    }
-  );
-
-  upstream.data.on(
-    "error",
-    error => {
-
-      if (
-        finished ||
-        clientClosed ||
-        res.writableEnded
-      ) {
-
-        return;
-      }
-
-      console.error(
-        "[NVIDIA Stream Error]",
-        error.code ||
-        error.message
-      );
-
-      try {
-
-        res.write(
-          `data: ${JSON.stringify({
-
-            error: {
-
-              message:
-                error.message ||
-                "NVIDIA streaming error",
-
-              type:
-                "stream_error"
-            }
-
-          })}\n\n`
-        );
-
-      } catch {
-        // Client disconnected.
-      }
-
-      if (
-        !res.writableEnded
-      ) {
-
-        res.end();
-      }
-    }
-  );
-}
+);
 
 // ============================================================
-// CHAT COMPLETIONS
+// OPENAI /v1/models
+// ============================================================
+
+app.get(
+  "/v1/models",
+  (req, res) => {
+
+    const created =
+      Math.floor(
+        Date.now() / 1000
+      );
+
+    res.json({
+      object: "list",
+
+      data:
+        Object.values(MODELS).map(
+          model => ({
+            id:
+              model.id,
+
+            object:
+              "model",
+
+            created,
+
+            owned_by:
+              model.owner
+          })
+        )
+    });
+  }
+);
+
+// ============================================================
+// OPENAI /v1/chat/completions
 // ============================================================
 
 app.post(
   "/v1/chat/completions",
-  async (
-    req,
-    res
-  ) => {
+  async (req, res) => {
 
     const body =
-      req.body ||
-      {};
+      req.body || {};
 
     // ========================================================
     // STREAMING ONLY
@@ -2593,9 +1096,7 @@ app.post(
     ) {
 
       return sendOpenAIError(
-
         res,
-
         400,
 
         "This proxy supports streaming chat completions only. Set stream=true.",
@@ -2618,9 +1119,7 @@ app.post(
     ) {
 
       return sendOpenAIError(
-
         res,
-
         400,
 
         validationError,
@@ -2630,286 +1129,291 @@ app.post(
     }
 
     // ========================================================
-    // MODEL
+    // SELECT MODEL
     // ========================================================
 
     const requestedModel =
       body.model;
 
-    let model =
+    let selectedModel =
       getModel(
         requestedModel
       );
 
     // ========================================================
-    // UNKNOWN MODEL
+    // UNKNOWN MODEL -> FALLBACK
     // ========================================================
 
-    if (
-      !model
-    ) {
+    if (!selectedModel) {
 
       console.warn(
         `[Fallback] Unknown model "${requestedModel}". ` +
         `Using "${FALLBACK_MODEL}".`
       );
 
-      model =
-        MODELS[
-          FALLBACK_MODEL
-        ];
+      selectedModel =
+        MODELS[FALLBACK_MODEL];
     }
 
     // ========================================================
-    // MEDIA VALIDATION
+    // MULTIMODAL VALIDATION
     // ========================================================
 
     if (
       containsMedia(
         body.messages
       ) &&
-      !model.multimodal
+      !selectedModel.multimodal
     ) {
 
       return sendOpenAIError(
-
         res,
-
         400,
 
-        `"${model.id}" does not support image/video input.`,
+        `"${selectedModel.id}" does not support image/video input.`,
 
         "multimodal_not_supported"
       );
     }
 
     // ========================================================
-    // COMMUNITY MODEL
+    // BUILD REQUEST
     // ========================================================
 
-    if (
-      model.community
-    ) {
+    let primaryRequest;
 
-      try {
+    try {
 
-        await handleCommunityStream(
-          req,
-          res,
-          body
+      primaryRequest =
+        buildNvidiaRequest(
+          body,
+          selectedModel
         );
 
-        return;
+    } catch (error) {
 
-      } catch (
+      console.error(
+        "[Request Build Error]",
         error
+      );
+
+      return sendOpenAIError(
+        res,
+        400,
+
+        error.message,
+
+        "request_build_error"
+      );
+    }
+
+    const endpoint =
+      `${selectedModel.apiBase || NIM_API_BASE}/chat/completions`;
+
+    console.log(
+      `[Request] ${selectedModel.id} -> ` +
+      `${selectedModel.upstream} [STREAMING]`
+    );
+
+    console.log(
+      `[Endpoint] ${selectedModel.apiBase || NIM_API_BASE}`
+    );
+
+    console.log(
+      `[Request Config] ` +
+      `temperature=${primaryRequest.temperature} ` +
+      `top_p=${primaryRequest.top_p ?? "default"} ` +
+      `max_tokens=${primaryRequest.max_tokens} ` +
+      `reasoning_effort=${primaryRequest.reasoning_effort ?? "not_sent"}`
+    );
+
+    // ========================================================
+    // SEND PRIMARY REQUEST
+    // ========================================================
+
+    let upstreamResponse;
+
+    try {
+
+      upstreamResponse =
+        await sendNvidiaRequest(
+          selectedModel,
+          primaryRequest
+        );
+
+    } catch (error) {
+
+      console.error(
+        "[NVIDIA Connection Error]",
+        error.message
+      );
+
+      // ======================================================
+      // CONNECTION FALLBACK
+      // ======================================================
+
+      if (
+        selectedModel.id !==
+        FALLBACK_MODEL
       ) {
 
-        console.error(
-          "[Community Model Error]",
-          error.code ||
-          error.message
+        console.warn(
+          `[Fallback] ${selectedModel.id} connection failed. ` +
+          `Retrying with ${FALLBACK_MODEL}.`
         );
 
-        // ----------------------------------------------------
-        // IMPORTANT:
-        //
-        // If community failed BEFORE SSE headers were sent,
-        // fallback is safe.
-        // ----------------------------------------------------
+        try {
 
-        if (
-          !res.headersSent &&
-          FALLBACK_MODEL &&
-          FALLBACK_MODEL !==
-            model.id
-        ) {
+          const fallbackModel =
+            MODELS[FALLBACK_MODEL];
 
-          console.warn(
-            `[Fallback] ${model.id} failed. ` +
-            `Falling back to ${FALLBACK_MODEL}.`
-          );
-
-          try {
-
-            const fallbackModel =
-              MODELS[
-                FALLBACK_MODEL
-              ];
-
-            await handleStandardStream(
-              req,
-              res,
+          const fallbackRequest =
+            buildNvidiaRequest(
               {
                 ...body,
-
                 model:
                   FALLBACK_MODEL
               },
               fallbackModel
             );
 
-            return;
-
-          } catch (
-            fallbackError
-          ) {
-
-            console.error(
-              "[Fallback Error]",
-              fallbackError.code ||
-              fallbackError.message
+          upstreamResponse =
+            await sendNvidiaRequest(
+              fallbackModel,
+              fallbackRequest
             );
 
-            if (
-              !res.headersSent
-            ) {
+          selectedModel =
+            fallbackModel;
 
-              return sendOpenAIError(
+          console.log(
+            `[Fallback] Now using ${selectedModel.upstream}`
+          );
 
-                res,
-
-                fallbackError.status ||
-                  502,
-
-                fallbackError.message ||
-                  "Fallback model failed.",
-
-                "fallback_error"
-              );
-            }
-
-            return;
-          }
-        }
-
-        // ----------------------------------------------------
-        // If headers have already been sent, we CANNOT replace
-        // the response with another model.
-        // ----------------------------------------------------
-
-        if (
-          res.headersSent
+        } catch (
+          fallbackError
         ) {
 
           console.error(
-            "[Community] SSE already started; fallback cannot replace active stream."
+            "[Fallback Connection Error]",
+            fallbackError.message
           );
 
-          if (
-            !res.writableEnded
-          ) {
-
-            try {
-
-              res.write(
-                `data: ${JSON.stringify({
-
-                  error: {
-
-                    message:
-                      error.message ||
-                      "Community model streaming failed.",
-
-                    type:
-                      "stream_error"
-                  }
-
-                })}\n\n`
-              );
-
-            } catch {
-              // Client disconnected.
-            }
-
-            if (
-              !res.writableEnded
-            ) {
-
-              res.end();
-            }
-          }
-
-          return;
-        }
-
-        return sendOpenAIError(
-
-          res,
-
-          error.status ||
+          return sendOpenAIError(
+            res,
             502,
 
-          error.message ||
-            "Community model request failed.",
+            fallbackError.message,
 
-          "community_model_error"
+            "nvidia_fallback_error"
+          );
+        }
+
+      } else {
+
+        return sendOpenAIError(
+          res,
+          502,
+
+          error.message,
+
+          "nvidia_connection_error"
         );
       }
     }
 
     // ========================================================
-    // STANDARD MODEL
+    // HANDLE PRIMARY HTTP ERROR
     // ========================================================
 
-    try {
-
-      await handleStandardStream(
-        req,
-        res,
-        body,
-        model
-      );
-
-    } catch (
-      error
+    if (
+      upstreamResponse.status < 200 ||
+      upstreamResponse.status >= 300
     ) {
 
+      const upstreamMessage =
+        await readErrorStream(
+          upstreamResponse.data
+        );
+
       console.error(
-        "[Standard NVIDIA Error]",
-        error.code ||
-        error.message
+        `[NVIDIA HTTP ${upstreamResponse.status}] ` +
+        `${selectedModel.upstream}: ` +
+        upstreamMessage
       );
 
       // ======================================================
-      // FALLBACK
+      // HTTP FALLBACK
       // ======================================================
 
       if (
-        model.id !==
-          FALLBACK_MODEL &&
-        !res.headersSent
+        selectedModel.id !==
+        FALLBACK_MODEL
       ) {
 
         console.warn(
-          `[Fallback] ${model.id} failed. ` +
-          `Falling back to ${FALLBACK_MODEL}.`
+          `[Fallback] ${selectedModel.id} returned HTTP ` +
+          `${upstreamResponse.status}. ` +
+          `Retrying with ${FALLBACK_MODEL}.`
         );
 
         try {
 
           const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+            MODELS[FALLBACK_MODEL];
 
-          await handleStandardStream(
+          const fallbackRequest =
+            buildNvidiaRequest(
+              {
+                ...body,
+                model:
+                  FALLBACK_MODEL
+              },
+              fallbackModel
+            );
 
-            req,
+          const fallbackResponse =
+            await sendNvidiaRequest(
+              fallbackModel,
+              fallbackRequest
+            );
 
-            res,
+          if (
+            fallbackResponse.status < 200 ||
+            fallbackResponse.status >= 300
+          ) {
 
-            {
-              ...body,
+            const fallbackMessage =
+              await readErrorStream(
+                fallbackResponse.data
+              );
 
-              model:
-                FALLBACK_MODEL
-            },
+            console.error(
+              `[Fallback HTTP ${fallbackResponse.status}] ` +
+              fallbackMessage
+            );
 
-            fallbackModel
+            return sendOpenAIError(
+              res,
+
+              fallbackResponse.status,
+
+              fallbackMessage,
+
+              "nvidia_fallback_error"
+            );
+          }
+
+          upstreamResponse =
+            fallbackResponse;
+
+          selectedModel =
+            fallbackModel;
+
+          console.log(
+            `[Fallback] Now streaming from ` +
+            `${selectedModel.upstream}`
           );
-
-          return;
 
         } catch (
           fallbackError
@@ -2917,187 +1421,389 @@ app.post(
 
           console.error(
             "[Fallback Error]",
-            fallbackError.code ||
             fallbackError.message
           );
 
-          if (
-            !res.headersSent
-          ) {
-
-            return sendOpenAIError(
-
-              res,
-
-              fallbackError.status ||
-                502,
-
-              fallbackError.message ||
-                "Fallback model failed.",
-
-              "fallback_error"
-            );
-          }
-
-          return;
-        }
-      }
-
-      if (
-        !res.headersSent
-      ) {
-
-        return sendOpenAIError(
-
-          res,
-
-          error.status ||
+          return sendOpenAIError(
+            res,
             502,
 
-          error.message ||
-            "NVIDIA API request failed.",
+            fallbackError.message,
+
+            "nvidia_fallback_error"
+          );
+        }
+
+      } else {
+
+        return sendOpenAIError(
+          res,
+
+          upstreamResponse.status,
+
+          upstreamMessage,
 
           "nvidia_api_error"
         );
       }
+    }
 
-      // SSE already started.
+    // ========================================================
+    // SSE RESPONSE HEADERS
+    // ========================================================
+
+    res.status(200);
+
+    res.setHeader(
+      "Content-Type",
+      "text/event-stream; charset=utf-8"
+    );
+
+    res.setHeader(
+      "Cache-Control",
+      "no-cache, no-transform"
+    );
+
+    res.setHeader(
+      "Connection",
+      "keep-alive"
+    );
+
+    res.setHeader(
+      "X-Accel-Buffering",
+      "no"
+    );
+
+    // Flush headers immediately when supported.
+    if (
+      typeof res.flushHeaders ===
+      "function"
+    ) {
+      res.flushHeaders();
+    }
+
+    // ========================================================
+    // STREAM STATE
+    // ========================================================
+
+    let buffer = "";
+
+    let finished = false;
+
+    // ========================================================
+    // WRITE SSE
+    // ========================================================
+
+    function writeSSE(data) {
+
+      if (
+        finished ||
+        res.writableEnded
+      ) {
+        return;
+      }
+
+      try {
+
+        res.write(
+          `data: ${JSON.stringify(data)}\n\n`
+        );
+
+      } catch (error) {
+
+        console.error(
+          "[SSE Write Error]",
+          error.message
+        );
+      }
+    }
+
+    // ========================================================
+    // FINISH STREAM
+    // ========================================================
+
+    function finishStream() {
+
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+
+      try {
+
+        if (
+          !res.writableEnded
+        ) {
+
+          res.write(
+            "data: [DONE]\n\n"
+          );
+        }
+
+      } catch {
+        // Client may already be gone.
+      }
+
       if (
         !res.writableEnded
       ) {
 
-        try {
-
-          res.write(
-            `data: ${JSON.stringify({
-
-              error: {
-
-                message:
-                  error.message ||
-                  "NVIDIA streaming error",
-
-                type:
-                  "stream_error"
-
-              }
-
-            })}\n\n`
-          );
-
-        } catch {
-          // Client disconnected.
-        }
-
         res.end();
       }
     }
-  }
-);
 
-// ============================================================
-// HEALTH
-// ============================================================
+    // ========================================================
+    // PROCESS SSE LINE
+    // ========================================================
 
-app.get(
-  "/health",
-  (
-    req,
-    res
-  ) => {
+    function processSSELine(line) {
 
-    res.json({
+      line =
+        line.replace(
+          /\r$/,
+          ""
+        );
 
-      status:
-        "ok",
+      if (
+        !line.trim()
+      ) {
+        return;
+      }
 
-      streaming:
-        true,
+      // SSE comment / heartbeat.
+      if (
+        line.startsWith(":")
+      ) {
+        return;
+      }
 
-      api_base:
-        NIM_API_BASE,
+      if (
+        !line.startsWith("data:")
+      ) {
+        return;
+      }
 
-      community_api_base:
-        COMMUNITY_NIM_API_BASE,
+      const raw =
+        line
+          .slice(5)
+          .trim();
 
-      fallback_model:
-        FALLBACK_MODEL,
+      if (
+        raw === "[DONE]"
+      ) {
 
-      reasoning_display:
-        SHOW_REASONING,
+        finishStream();
 
-      models:
-        Object.values(
-          MODELS
-        ).map(
-          model => ({
+        return;
+      }
 
-            id:
-              model.id,
+      let parsed;
 
-            upstream:
-              model.upstream,
+      try {
 
-            multimodal:
-              model.multimodal,
+        parsed =
+          JSON.parse(raw);
 
-            community:
-              Boolean(
-                model.community
-              ),
+      } catch (error) {
 
-            context_window:
-              model.contextWindow,
+        console.error(
+          "[SSE JSON Parse Error]",
+          error.message,
 
-            max_tokens:
-              model.maxTokens
-          })
+          raw.substring(
+            0,
+            500
+          )
+        );
+
+        return;
+      }
+
+      // ======================================================
+      // NORMALIZE DELTA
+      // ======================================================
+
+      if (
+        Array.isArray(
+          parsed.choices
         )
-    });
-  }
-);
+      ) {
 
-// ============================================================
-// /v1/models
-// ============================================================
+        for (
+          const choice of
+          parsed.choices
+        ) {
 
-app.get(
-  "/v1/models",
-  (
-    req,
-    res
-  ) => {
+          const delta =
+            choice?.delta;
 
-    const created =
-      Math.floor(
-        Date.now() /
-          1000
+          if (!delta) {
+            continue;
+          }
+
+          // Remove explicit <think> wrappers from
+          // normal content without changing the
+          // reasoning_content field.
+          if (
+            typeof delta.content ===
+            "string"
+          ) {
+
+            delta.content =
+              stripThinkTags(
+                delta.content
+              );
+          }
+
+          // Optional reasoning display toggle.
+          if (
+            !SHOW_REASONING
+          ) {
+
+            delete delta.reasoning;
+
+            delete delta.reasoning_content;
+          }
+        }
+      }
+
+      // ======================================================
+      // SEND CHUNK TO CLIENT
+      // ======================================================
+
+      writeSSE(
+        parsed
       );
+    }
 
-    res.json({
+    // ========================================================
+    // UPSTREAM DATA
+    // ========================================================
 
-      object:
-        "list",
+    upstreamResponse.data.on(
+      "data",
+      chunk => {
 
-      data:
-        Object.values(
-          MODELS
-        ).map(
-          model => ({
+        if (
+          finished ||
+          res.writableEnded
+        ) {
+          return;
+        }
 
-            id:
-              model.id,
+        buffer +=
+          chunk.toString(
+            "utf8"
+          );
 
-            object:
-              "model",
+        const lines =
+          buffer.split("\n");
 
-            created,
+        buffer =
+          lines.pop() || "";
 
-            owned_by:
-              model.owner
-          })
-        )
-    });
+        for (
+          const line of
+          lines
+        ) {
+
+          if (finished) {
+            break;
+          }
+
+          processSSELine(
+            line
+          );
+        }
+      }
+    );
+
+    // ========================================================
+    // UPSTREAM END
+    // ========================================================
+
+    upstreamResponse.data.on(
+      "end",
+      () => {
+
+        if (
+          buffer.trim()
+        ) {
+
+          processSSELine(
+            buffer
+          );
+        }
+
+        finishStream();
+      }
+    );
+
+    // ========================================================
+    // UPSTREAM ERROR
+    // ========================================================
+
+    upstreamResponse.data.on(
+      "error",
+      error => {
+
+        console.error(
+          "[NVIDIA Stream Error]",
+          error.message
+        );
+
+        if (
+          finished ||
+          res.writableEnded
+        ) {
+          return;
+        }
+
+        writeSSE({
+          error: {
+            message:
+              error.message ||
+              "NVIDIA streaming error",
+
+            type:
+              "stream_error"
+          }
+        });
+
+        finished = true;
+
+        if (
+          !res.writableEnded
+        ) {
+
+          res.end();
+        }
+      }
+    );
+
+    // ========================================================
+    // CLIENT DISCONNECT
+    // ========================================================
+
+    req.on(
+      "close",
+      () => {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        if (
+          upstreamResponse?.data?.destroy
+        ) {
+
+          upstreamResponse.data.destroy();
+        }
+      }
+    );
   }
 );
 
@@ -3106,22 +1812,16 @@ app.get(
 // ============================================================
 
 app.use(
-  (
-    req,
-    res
-  ) => {
+  (req, res) => {
 
     if (
       res.headersSent
     ) {
-
       return;
     }
 
     sendOpenAIError(
-
       res,
-
       404,
 
       `Endpoint ${req.path} not found`,
@@ -3144,7 +1844,7 @@ app.listen(
     );
 
     console.log(
-      " NVIDIA NIM OpenAI-Compatible Streaming Proxy"
+      " NVIDIA NIM OpenAI-Compatible Proxy"
     );
 
     console.log(
@@ -3160,7 +1860,7 @@ app.listen(
     );
 
     console.log(
-      `Community API: ${COMMUNITY_NIM_API_BASE}`
+      `Community NVIDIA API: ${COMMUNITY_NIM_API_BASE}`
     );
 
     console.log(
@@ -3197,18 +1897,11 @@ app.listen(
 
     for (
       const model of
-      Object.values(
-        MODELS
-      )
+      Object.values(MODELS)
     ) {
 
       console.log(
-        `  ${model.id} -> ${model.upstream}` +
-        `${
-          model.community
-            ? " [COMMUNITY]"
-            : ""
-        }`
+        `  ${model.id} -> ${model.upstream}`
       );
     }
 

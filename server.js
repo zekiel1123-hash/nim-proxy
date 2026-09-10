@@ -44,7 +44,8 @@ const axios = require("axios");
 
 const app = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+  process.env.PORT || 3000;
 
 const NIM_API_BASE =
   process.env.NIM_API_BASE ||
@@ -68,22 +69,27 @@ const SHOW_REASONING =
   ).toLowerCase() === "true";
 
 const DEFAULT_KIMI_REASONING =
-  process.env.KIMI_REASONING_EFFORT || "high";
+  process.env.KIMI_REASONING_EFFORT ||
+  "high";
 
 const DEFAULT_DEEPSEEK_REASONING =
-  process.env.DEEPSEEK_REASONING_EFFORT || "high";
+  process.env.DEEPSEEK_REASONING_EFFORT ||
+  "high";
 
 const DEFAULT_MUSE_REASONING =
-  process.env.MUSE_REASONING_EFFORT || "high";
+  process.env.MUSE_REASONING_EFFORT ||
+  "high";
 
 const DEFAULT_NEMOTRON_THINKING =
   String(
-    process.env.NEMOTRON_ENABLE_THINKING || "true"
+    process.env.NEMOTRON_ENABLE_THINKING ||
+      "true"
   ).toLowerCase() === "true";
 
 const DEFAULT_GEMMA_THINKING =
   String(
-    process.env.GEMMA_ENABLE_THINKING || "true"
+    process.env.GEMMA_ENABLE_THINKING ||
+      "true"
   ).toLowerCase() === "true";
 
 // ============================================================
@@ -127,6 +133,7 @@ const MODELS = {
       1.0,
 
     reasoning: {
+
       type:
         "reasoning_effort",
 
@@ -141,6 +148,7 @@ const MODELS = {
     },
 
     supports: {
+
       top_p:
         false,
 
@@ -195,6 +203,7 @@ const MODELS = {
       0.95,
 
     reasoning: {
+
       type:
         "reasoning_effort",
 
@@ -209,6 +218,7 @@ const MODELS = {
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -263,6 +273,7 @@ const MODELS = {
       0.95,
 
     reasoning: {
+
       type:
         "reasoning_effort",
 
@@ -277,6 +288,7 @@ const MODELS = {
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -331,6 +343,7 @@ const MODELS = {
       1.0,
 
     reasoning: {
+
       type:
         "reasoning_effort",
 
@@ -348,6 +361,7 @@ const MODELS = {
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -402,6 +416,7 @@ const MODELS = {
       0.95,
 
     reasoning: {
+
       type:
         "chat_template_thinking",
 
@@ -410,6 +425,7 @@ const MODELS = {
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -464,6 +480,7 @@ const MODELS = {
       0.95,
 
     reasoning: {
+
       type:
         "chat_template_thinking",
 
@@ -472,6 +489,7 @@ const MODELS = {
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -533,11 +551,13 @@ const MODELS = {
       1.0,
 
     reasoning: {
+
       type:
         "none"
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -563,48 +583,8 @@ const MODELS = {
 
   // ==========================================================
   // COMMUNITY / DEPLOYMENT
-  // DAVIDAU LLAMA 3.3 8B HERETIC
-  // ==========================================================
-  //
-  // EXACT MODEL:
-  //
-  // DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-
-  // Uncensored-Claude-4.5-Opus-High-Reasoning
-  //
-  // EXACT WORKING NVIDIA SDK REQUEST:
-  //
-  // baseURL:
-  //   https://nim.api.nvidia.com/v1
-  //
-  // model:
-  //   DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-
-  //   Uncensored-Claude-4.5-Opus-High-Reasoning
-  //
-  // temperature:
-  //   0.5
-  //
-  // top_p:
-  //   1
-  //
-  // max_tokens:
-  //   1024
-  //
-  // stream:
-  //   true
-  //
-  // IMPORTANT:
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  // No tools.
-  // No seed.
-  // No stop.
-  // No penalties.
-  // No stream_options.
-  //
-  // Client values are deliberately ignored for this model
-  // so the request remains identical to the known-working
-  // NVIDIA SDK example.
+  // DAVIDAU LLAMA 3.3 8B
+  // THINKING / HERETIC / UNCENSORED
   // ==========================================================
 
   "llama3.3-8b-heretic": {
@@ -640,11 +620,13 @@ const MODELS = {
       1.0,
 
     reasoning: {
+
       type:
         "none"
     },
 
     supports: {
+
       top_p:
         true,
 
@@ -706,10 +688,132 @@ function getModel(
     modelName &&
     MODELS[modelName]
   ) {
-    return MODELS[modelName];
+
+    return MODELS[
+      modelName
+    ];
   }
 
   return null;
+}
+
+// ============================================================
+// ERROR MESSAGE EXTRACTION
+// ============================================================
+
+function extractErrorMessage(
+  errorData
+) {
+
+  if (
+    !errorData
+  ) {
+
+    return "Unknown NVIDIA API error";
+  }
+
+  if (
+    typeof errorData ===
+    "string"
+  ) {
+
+    return errorData ||
+      "Unknown NVIDIA API error";
+  }
+
+  if (
+    errorData.error
+  ) {
+
+    if (
+      typeof errorData.error ===
+      "string"
+    ) {
+
+      return errorData.error;
+    }
+
+    if (
+      errorData.error.message
+    ) {
+
+      return String(
+        errorData.error.message
+      );
+    }
+  }
+
+  if (
+    errorData.message
+  ) {
+
+    return String(
+      errorData.message
+    );
+  }
+
+  try {
+
+    return JSON.stringify(
+      errorData
+    );
+
+  } catch {
+
+    return "Unknown NVIDIA API error";
+  }
+}
+
+// ============================================================
+// OPENAI ERROR RESPONSE
+// ============================================================
+
+function sendOpenAIError(
+  res,
+  status,
+  message,
+  type = "proxy_error"
+) {
+
+  if (
+    res.headersSent
+  ) {
+
+    try {
+
+      if (
+        !res.writableEnded
+      ) {
+
+        res.end();
+      }
+
+    } catch {
+      // Ignore.
+    }
+
+    return;
+  }
+
+  return res
+    .status(status)
+    .json({
+
+      error: {
+
+        message:
+          message ||
+          "Proxy error",
+
+        type,
+
+        param:
+          null,
+
+        code:
+          null
+      }
+    });
 }
 
 // ============================================================
@@ -721,16 +825,20 @@ function stripThinkTags(
 ) {
 
   if (
-    typeof text !== "string"
+    typeof text !==
+    "string"
   ) {
+
     return text;
   }
 
   return text
+
     .replace(
       /<think>[\s\S]*?<\/think>/gi,
       ""
     )
+
     .replace(
       /<\/?think>/gi,
       "");
@@ -745,13 +853,17 @@ function containsMedia(
 ) {
 
   if (
-    !Array.isArray(messages)
+    !Array.isArray(
+      messages
+    )
   ) {
+
     return false;
   }
 
   for (
-    const message of messages
+    const message of
+    messages
   ) {
 
     if (
@@ -759,17 +871,23 @@ function containsMedia(
         message?.content
       )
     ) {
+
       continue;
     }
 
     for (
-      const part of message.content
+      const part of
+      message.content
     ) {
 
       if (
-        part?.type === "image_url" ||
-        part?.type === "video_url"
+        part?.type ===
+          "image_url" ||
+
+        part?.type ===
+          "video_url"
       ) {
+
         return true;
       }
     }
@@ -787,15 +905,24 @@ function validateMessages(
 ) {
 
   if (
-    !Array.isArray(messages)
+    !Array.isArray(
+      messages
+    )
   ) {
-    return "messages must be an array";
+
+    return (
+      "messages must be an array"
+    );
   }
 
   if (
-    messages.length === 0
+    messages.length ===
+    0
   ) {
-    return "messages cannot be empty";
+
+    return (
+      "messages cannot be empty"
+    );
   }
 
   for (
@@ -809,25 +936,33 @@ function validateMessages(
 
     if (
       !message ||
-      typeof message !== "object"
+      typeof message !==
+        "object"
     ) {
+
       return (
         `messages[${i}] must be an object`
       );
     }
 
     if (
-      typeof message.role !== "string"
+      typeof message.role !==
+      "string"
     ) {
+
       return (
         `messages[${i}].role must be a string`
       );
     }
 
     if (
-      message.content === undefined &&
-      message.tool_calls === undefined
+      message.content ===
+        undefined &&
+
+      message.tool_calls ===
+        undefined
     ) {
+
       return (
         `messages[${i}] must contain content or tool_calls`
       );
@@ -850,6 +985,7 @@ function getReasoningEffort(
     model.reasoning.type !==
     "reasoning_effort"
   ) {
+
     return null;
   }
 
@@ -862,6 +998,7 @@ function getReasoningEffort(
       requested
     )
   ) {
+
     return requested;
   }
 
@@ -883,24 +1020,24 @@ function buildNvidiaRequest(
 ) {
 
   // ==========================================================
-  // EXACT DAVIDAU COMMUNITY REQUEST
+  // DAVIDAU COMMUNITY MODEL
   // ==========================================================
   //
-  // This is intentionally NOT processed through the generic
-  // model parameter system.
+  // EXACTLY MATCHES THE USER'S WORKING OPENAI SDK REQUEST:
   //
-  // It matches the user's known-working OpenAI SDK request:
+  // model
+  // messages
+  // temperature: 0.5
+  // top_p: 1
+  // max_tokens: 1024
+  // stream: true
   //
-  // const completion = await openai.chat.completions.create({
-  //   model: "DavidAU/...",
-  //   messages: [...],
-  //   temperature: 0.5,
-  //   top_p: 1,
-  //   max_tokens: 1024,
-  //   stream: true,
-  // })
+  // No reasoning_effort.
+  // No chat_template_kwargs.
+  // No tools.
+  // No stop.
+  // No stream_options.
   //
-  // Nothing else is sent.
   // ==========================================================
 
   if (
@@ -911,7 +1048,7 @@ function buildNvidiaRequest(
     return {
 
       model:
-        "DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-Uncensored-Claude-4.5-Opus-High-Reasoning",
+        model.upstream,
 
       messages:
         body.messages,
@@ -931,7 +1068,47 @@ function buildNvidiaRequest(
   }
 
   // ==========================================================
-  // GENERIC REQUEST FOR ALL OTHER MODELS
+  // DEEPSEEK R1 COMMUNITY MODEL
+  // ==========================================================
+
+  if (
+    model.id ===
+    "deepseek-r1-32b-uncensored"
+  ) {
+
+    return {
+
+      model:
+        model.upstream,
+
+      messages:
+        body.messages,
+
+      temperature:
+        body.temperature !==
+        undefined
+          ? body.temperature
+          : 0.5,
+
+      top_p:
+        body.top_p !==
+        undefined
+          ? body.top_p
+          : 1,
+
+      max_tokens:
+        body.max_tokens !==
+        undefined
+          ? body.max_tokens
+          : 1024,
+
+      stream:
+        true
+    };
+  }
+
+  // ==========================================================
+  // STANDARD NVIDIA MODELS
   // ==========================================================
 
   const request = {
@@ -951,7 +1128,8 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    body.temperature !== undefined
+    body.temperature !==
+    undefined
   ) {
 
     request.temperature =
@@ -972,14 +1150,16 @@ function buildNvidiaRequest(
   ) {
 
     if (
-      body.top_p !== undefined
+      body.top_p !==
+      undefined
     ) {
 
       request.top_p =
         body.top_p;
 
     } else if (
-      model.top_p !== undefined
+      model.top_p !==
+      undefined
     ) {
 
       request.top_p =
@@ -991,59 +1171,74 @@ function buildNvidiaRequest(
   // MAX TOKENS
   // ==========================================================
 
-  let maxTokens =
+  let requestedMaxTokens =
     body.max_tokens;
 
   if (
-    maxTokens === undefined ||
-    maxTokens === null
+    requestedMaxTokens ===
+    undefined
   ) {
 
-    maxTokens =
-      model.defaultMaxTokens ??
+    requestedMaxTokens =
+      body.max_completion_tokens;
+  }
+
+  if (
+    requestedMaxTokens ===
+    undefined
+  ) {
+
+    requestedMaxTokens =
       model.maxTokens;
   }
 
-  maxTokens =
-    Number(
-      maxTokens
-    );
-
   if (
-    !Number.isFinite(
-      maxTokens
-    )
+    model.maxTokens &&
+    requestedMaxTokens >
+      model.maxTokens
   ) {
 
-    maxTokens =
-      model.defaultMaxTokens ??
-      model.maxTokens;
-  }
-
-  maxTokens =
-    Math.floor(
-      maxTokens
-    );
-
-  if (
-    maxTokens < 1
-  ) {
-
-    maxTokens =
-      1;
-  }
-
-  if (
-    maxTokens >
-    model.maxTokens
-  ) {
-
-    maxTokens =
+    requestedMaxTokens =
       model.maxTokens;
   }
 
   request.max_tokens =
-    maxTokens;
+    requestedMaxTokens;
+
+  // ==========================================================
+  // REASONING EFFORT
+  // ==========================================================
+
+  if (
+    model.reasoning.type ===
+    "reasoning_effort"
+  ) {
+
+    request.reasoning_effort =
+      getReasoningEffort(
+        body,
+        model
+      );
+  }
+
+  // ==========================================================
+  // CHAT TEMPLATE THINKING
+  // ==========================================================
+
+  if (
+    model.reasoning.type ===
+    "chat_template_thinking"
+  ) {
+
+    request.chat_template_kwargs = {
+
+      enable_thinking:
+        model.id ===
+          "nemotron-3-ultra"
+          ? DEFAULT_NEMOTRON_THINKING
+          : DEFAULT_GEMMA_THINKING
+    };
+  }
 
   // ==========================================================
   // SEED
@@ -1051,24 +1246,12 @@ function buildNvidiaRequest(
 
   if (
     model.supports.seed &&
-    body.seed !== undefined
+    body.seed !==
+      undefined
   ) {
 
     request.seed =
       body.seed;
-  }
-
-  // ==========================================================
-  // STOP
-  // ==========================================================
-
-  if (
-    model.supports.stop &&
-    body.stop !== undefined
-  ) {
-
-    request.stop =
-      body.stop;
   }
 
   // ==========================================================
@@ -1077,16 +1260,25 @@ function buildNvidiaRequest(
 
   if (
     model.supports.tools &&
-    body.tools !== undefined
+    Array.isArray(
+      body.tools
+    ) &&
+    body.tools.length >
+      0
   ) {
 
     request.tools =
       body.tools;
   }
 
+  // ==========================================================
+  // TOOL CHOICE
+  // ==========================================================
+
   if (
     model.supports.tools &&
-    body.tool_choice !== undefined
+    body.tool_choice !==
+      undefined
   ) {
 
     request.tool_choice =
@@ -1094,16 +1286,17 @@ function buildNvidiaRequest(
   }
 
   // ==========================================================
-  // STREAM OPTIONS
+  // STOP
   // ==========================================================
 
   if (
-    model.supports.stream_options &&
-    body.stream_options !== undefined
+    model.supports.stop &&
+    body.stop !==
+      undefined
   ) {
 
-    request.stream_options =
-      body.stream_options;
+    request.stop =
+      body.stop;
   }
 
   // ==========================================================
@@ -1112,7 +1305,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.presence_penalty &&
-    body.presence_penalty !== undefined
+    body.presence_penalty !==
+      undefined
   ) {
 
     request.presence_penalty =
@@ -1125,7 +1319,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.frequency_penalty &&
-    body.frequency_penalty !== undefined
+    body.frequency_penalty !==
+      undefined
   ) {
 
     request.frequency_penalty =
@@ -1133,329 +1328,48 @@ function buildNvidiaRequest(
   }
 
   // ==========================================================
-  // MODEL-SPECIFIC REASONING
+  // STREAM OPTIONS
   // ==========================================================
 
-  // ----------------------------------------------------------
-  // KIMI K3
-  // ----------------------------------------------------------
-
   if (
-    model.id ===
-    "kimi-k3"
+    model.supports.stream_options &&
+    body.stream_options !==
+      undefined
   ) {
 
-    request.reasoning_effort =
-      getReasoningEffort(
-        body,
-        model
-      );
-  }
-
-  // ----------------------------------------------------------
-  // DEEPSEEK V4 PRO / FLASH
-  // ----------------------------------------------------------
-
-  else if (
-    model.id ===
-      "deepseek-v4-pro" ||
-    model.id ===
-      "deepseek-v4-flash"
-  ) {
-
-    request.reasoning_effort =
-      getReasoningEffort(
-        body,
-        model
-      );
-
-    if (
-      body.chat_template_kwargs &&
-      typeof body.chat_template_kwargs ===
-        "object"
-    ) {
-
-      request.chat_template_kwargs =
-        body.chat_template_kwargs;
-    }
-  }
-
-  // ----------------------------------------------------------
-  // MUSE GLIMMER
-  // ----------------------------------------------------------
-
-  else if (
-    model.id ===
-    "muse-glimmer-30b"
-  ) {
-
-    request.reasoning_effort =
-      getReasoningEffort(
-        body,
-        model
-      );
-
-    if (
-      body.chat_template_kwargs &&
-      typeof body.chat_template_kwargs ===
-        "object"
-    ) {
-
-      request.chat_template_kwargs =
-        body.chat_template_kwargs;
-    }
-  }
-
-  // ----------------------------------------------------------
-  // NEMOTRON 3 ULTRA
-  // ----------------------------------------------------------
-
-  else if (
-    model.id ===
-    "nemotron-3-ultra"
-  ) {
-
-    request.chat_template_kwargs = {
-
-      ...(body.chat_template_kwargs || {}),
-
-      enable_thinking:
-        body.chat_template_kwargs
-          ?.enable_thinking ??
-        DEFAULT_NEMOTRON_THINKING
-    };
-  }
-
-  // ----------------------------------------------------------
-  // GEMMA 4 31B IT
-  // ----------------------------------------------------------
-
-  else if (
-    model.id ===
-    "gemma-4-31b"
-  ) {
-
-    request.chat_template_kwargs = {
-
-      ...(body.chat_template_kwargs || {}),
-
-      enable_thinking:
-        body.chat_template_kwargs
-          ?.enable_thinking ??
-        DEFAULT_GEMMA_THINKING
-    };
+    request.stream_options =
+      body.stream_options;
   }
 
   return request;
 }
 
 // ============================================================
-// REASONING NORMALIZATION
-// ============================================================
-
-function normalizeChunk(
-  data
-) {
-
-  if (
-    !data ||
-    typeof data !== "object"
-  ) {
-    return data;
-  }
-
-  if (
-    Array.isArray(
-      data.choices
-    )
-  ) {
-
-    for (
-      const choice of data.choices
-    ) {
-
-      const delta =
-        choice?.delta;
-
-      if (
-        !delta
-      ) {
-        continue;
-      }
-
-      if (
-        typeof delta.content ===
-        "string"
-      ) {
-
-        delta.content =
-          stripThinkTags(
-            delta.content
-          );
-      }
-
-      if (
-        !SHOW_REASONING
-      ) {
-
-        delete delta.reasoning;
-
-        delete delta.reasoning_content;
-      }
-    }
-  }
-
-  return data;
-}
-
-// ============================================================
-// SAFE ERROR MESSAGE
-// ============================================================
-
-function extractErrorMessage(
-  responseData
-) {
-
-  if (
-    typeof responseData ===
-    "string"
-  ) {
-
-    return responseData;
-  }
-
-  if (
-    responseData?.error?.message
-  ) {
-
-    return responseData.error.message;
-  }
-
-  if (
-    typeof responseData?.error ===
-    "string"
-  ) {
-
-    return responseData.error;
-  }
-
-  if (
-    responseData?.message
-  ) {
-
-    return responseData.message;
-  }
-
-  try {
-
-    return JSON.stringify(
-      responseData
-    );
-
-  } catch {
-
-    return "NVIDIA API request failed";
-  }
-}
-
-// ============================================================
-// OPENAI ERROR RESPONSE
-// ============================================================
-
-function sendOpenAIError(
-  res,
-  status,
-  message,
-  code = "nvidia_api_error"
-) {
-
-  if (
-    res.headersSent
-  ) {
-    return;
-  }
-
-  res
-    .status(status)
-    .json({
-
-      error: {
-
-        message,
-
-        type:
-          "invalid_request_error",
-
-        code
-      }
-    });
-}
-
-// ============================================================
-// HEALTH
-// ============================================================
-
-app.get(
-  "/health",
-  (req, res) => {
-
-    res.json({
-
-      status:
-        "ok",
-
-      streaming:
-        true,
-
-      api_base:
-        NIM_API_BASE,
-
-      community_api_base:
-        COMMUNITY_NIM_API_BASE,
-
-      fallback_model:
-        FALLBACK_MODEL,
-
-      reasoning_display:
-        SHOW_REASONING,
-
-      models:
-        Object.values(
-          MODELS
-        ).map(
-          model => ({
-
-            id:
-              model.id,
-
-            upstream:
-              model.upstream,
-
-            multimodal:
-              model.multimodal,
-
-            context_window:
-              model.contextWindow,
-
-            max_tokens:
-              model.maxTokens
-          })
-        )
-    });
-  }
-);
-
-// ============================================================
-// OPENAI /v1/models
+// GET MODELS
 // ============================================================
 
 app.get(
   "/v1/models",
   (req, res) => {
 
-    const created =
-      Math.floor(
-        Date.now() / 1000
+    const models =
+      Object.values(
+        MODELS
+      ).map(
+        model => ({
+
+          id:
+            model.id,
+
+          object:
+            "model",
+
+          created:
+            0,
+
+          owned_by:
+            model.owner
+        })
       );
 
     res.json({
@@ -1464,22 +1378,36 @@ app.get(
         "list",
 
       data:
-        Object.values(
+        models
+    });
+  }
+);
+
+// ============================================================
+// ROOT
+// ============================================================
+
+app.get(
+  "/",
+  (req, res) => {
+
+    res.json({
+
+      object:
+        "proxy",
+
+      status:
+        "ok",
+
+      streaming:
+        true,
+
+      fallback_model:
+        FALLBACK_MODEL,
+
+      models:
+        Object.keys(
           MODELS
-        ).map(
-          model => ({
-
-            id:
-              model.id,
-
-            object:
-              "model",
-
-            created,
-
-            owned_by:
-              model.owner
-          })
         )
     });
   }
@@ -1491,7 +1419,10 @@ app.get(
 
 app.post(
   "/v1/chat/completions",
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
 
     const body =
       req.body || {};
@@ -1501,7 +1432,8 @@ app.post(
     // ========================================================
 
     if (
-      body.stream !== true
+      body.stream !==
+      true
     ) {
 
       return sendOpenAIError(
@@ -1563,7 +1495,9 @@ app.post(
       );
 
       selectedModel =
-        MODELS[FALLBACK_MODEL];
+        MODELS[
+          FALLBACK_MODEL
+        ];
     }
 
     // ========================================================
@@ -1656,7 +1590,9 @@ app.post(
           }
         );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
 
       console.error(
         "[NVIDIA Connection Error]",
@@ -1680,7 +1616,9 @@ app.post(
         try {
 
           const fallbackModel =
-            MODELS[FALLBACK_MODEL];
+            MODELS[
+              FALLBACK_MODEL
+            ];
 
           const fallbackRequest =
             buildNvidiaRequest(
@@ -1763,12 +1701,27 @@ app.post(
     }
 
     // ========================================================
+    // LOG UPSTREAM RESPONSE
+    // ========================================================
+
+    console.log(
+      `[NVIDIA Response] status=${upstreamResponse.status}`
+    );
+
+    console.log(
+      `[NVIDIA Response] content-type=` +
+      `${upstreamResponse.headers?.["content-type"] || "unknown"}`
+    );
+
+    // ========================================================
     // UPSTREAM HTTP ERROR BEFORE STREAM
     // ========================================================
 
     if (
-      upstreamResponse.status < 200 ||
-      upstreamResponse.status >= 300
+      upstreamResponse.status <
+        200 ||
+      upstreamResponse.status >=
+        300
     ) {
 
       let errorText =
@@ -1790,6 +1743,7 @@ app.post(
             errorText.length >
             100000
           ) {
+
             break;
           }
         }
@@ -1841,7 +1795,9 @@ app.post(
         try {
 
           const fallbackModel =
-            MODELS[FALLBACK_MODEL];
+            MODELS[
+              FALLBACK_MODEL
+            ];
 
           const fallbackRequest =
             buildNvidiaRequest(
@@ -1889,8 +1845,10 @@ app.post(
             );
 
           if (
-            fallbackResponse.status < 200 ||
-            fallbackResponse.status >= 300
+            fallbackResponse.status <
+              200 ||
+            fallbackResponse.status >=
+              300
           ) {
 
             let fallbackText =
@@ -1912,6 +1870,7 @@ app.post(
                   fallbackText.length >
                   100000
                 ) {
+
                   break;
                 }
               }
@@ -1958,7 +1917,9 @@ app.post(
             fallbackResponse;
 
           selectedModel =
-            MODELS[FALLBACK_MODEL];
+            MODELS[
+              FALLBACK_MODEL
+            ];
 
           console.log(
             `[Fallback] Now streaming from ` +
@@ -1999,10 +1960,257 @@ app.post(
     }
 
     // ========================================================
+    // DAVIDAU COMMUNITY MODEL - RAW SSE PASSTHROUGH
+    // ========================================================
+    //
+    // IMPORTANT:
+    //
+    // The supplied working OpenAI SDK example for the DavidAU
+    // model receives the NVIDIA Community stream directly.
+    //
+    // Therefore this model bypasses the generic SSE parser.
+    //
+    // We do NOT:
+    //
+    // - parse JSON chunks
+    // - reconstruct SSE
+    // - strip <think> tags
+    // - alter delta.content
+    // - alter reasoning_content
+    // - add fields
+    // - remove fields
+    //
+    // The exact bytes received from NVIDIA are forwarded to
+    // the downstream client.
+    //
+    // ========================================================
+
+    if (
+      selectedModel.id ===
+      "llama3.3-8b-heretic"
+    ) {
+
+      console.log(
+        "[DavidAU] Using RAW SSE passthrough"
+      );
+
+      console.log(
+        "[DavidAU] Upstream request:",
+        JSON.stringify(
+          primaryRequest,
+          null,
+          2
+        )
+      );
+
+      console.log(
+        "[DavidAU] Upstream HTTP status:",
+        upstreamResponse.status
+      );
+
+      console.log(
+        "[DavidAU] Upstream content-type:",
+        upstreamResponse.headers?.[
+          "content-type"
+        ]
+      );
+
+      // ======================================================
+      // CLIENT SSE HEADERS
+      // ======================================================
+
+      res.status(
+        200
+      );
+
+      res.setHeader(
+        "Content-Type",
+        "text/event-stream; charset=utf-8"
+      );
+
+      res.setHeader(
+        "Cache-Control",
+        "no-cache, no-transform"
+      );
+
+      res.setHeader(
+        "Connection",
+        "keep-alive"
+      );
+
+      res.setHeader(
+        "X-Accel-Buffering",
+        "no"
+      );
+
+      if (
+        typeof res.flushHeaders ===
+        "function"
+      ) {
+
+        res.flushHeaders();
+      }
+
+      // ======================================================
+      // RAW STREAM STATE
+      // ======================================================
+
+      let rawBytes =
+        0;
+
+      let rawChunks =
+        0;
+
+      let rawEnded =
+        false;
+
+      // ======================================================
+      // RAW UPSTREAM DATA
+      // ======================================================
+
+      upstreamResponse.data.on(
+        "data",
+        chunk => {
+
+          if (
+            rawEnded ||
+            res.writableEnded
+          ) {
+
+            return;
+          }
+
+          rawChunks++;
+
+          rawBytes +=
+            chunk.length;
+
+          console.log(
+            `[DavidAU RAW CHUNK] ${chunk.length} bytes`
+          );
+
+          console.log(
+            "[DavidAU RAW DATA]",
+            chunk.toString(
+              "utf8"
+            )
+          );
+
+          try {
+
+            res.write(
+              chunk
+            );
+
+          } catch (
+            error
+          ) {
+
+            console.error(
+              "[DavidAU Response Write Error]",
+              error.message
+            );
+          }
+        }
+      );
+
+      // ======================================================
+      // RAW STREAM END
+      // ======================================================
+
+      upstreamResponse.data.on(
+        "end",
+        () => {
+
+          if (
+            rawEnded
+          ) {
+
+            return;
+          }
+
+          rawEnded =
+            true;
+
+          console.log(
+            `[DavidAU STREAM END] chunks=${rawChunks} bytes=${rawBytes}`
+          );
+
+          if (
+            !res.writableEnded
+          ) {
+
+            res.end();
+          }
+        }
+      );
+
+      // ======================================================
+      // RAW STREAM ERROR
+      // ======================================================
+
+      upstreamResponse.data.on(
+        "error",
+        error => {
+
+          console.error(
+            "[DavidAU RAW STREAM ERROR]",
+            error.message
+          );
+
+          rawEnded =
+            true;
+
+          if (
+            !res.writableEnded
+          ) {
+
+            res.end();
+          }
+        }
+      );
+
+      // ======================================================
+      // CLIENT DISCONNECT
+      // ======================================================
+
+      req.on(
+        "close",
+        () => {
+
+          if (
+            rawEnded
+          ) {
+
+            return;
+          }
+
+          console.log(
+            "[DavidAU] Client connection closed"
+          );
+
+          rawEnded =
+            true;
+
+          if (
+            upstreamResponse?.data?.destroy
+          ) {
+
+            upstreamResponse.data.destroy();
+          }
+        }
+      );
+
+      return;
+    }
+
+    // ========================================================
     // SSE RESPONSE HEADERS
     // ========================================================
 
-    res.status(200);
+    res.status(
+      200
+    );
 
     res.setHeader(
       "Content-Type",
@@ -2023,6 +2231,14 @@ app.post(
       "X-Accel-Buffering",
       "no"
     );
+
+    if (
+      typeof res.flushHeaders ===
+      "function"
+    ) {
+
+      res.flushHeaders();
+    }
 
     // ========================================================
     // STREAM STATE
@@ -2046,6 +2262,7 @@ app.post(
         finished ||
         res.writableEnded
       ) {
+
         return;
       }
 
@@ -2075,6 +2292,7 @@ app.post(
       if (
         finished
       ) {
+
         return;
       }
 
@@ -2121,12 +2339,14 @@ app.post(
       if (
         !line.trim()
       ) {
+
         return;
       }
 
       if (
         line.startsWith(":")
       ) {
+
         return;
       }
 
@@ -2135,6 +2355,7 @@ app.post(
           "data:"
         )
       ) {
+
         return;
       }
 
@@ -2144,7 +2365,8 @@ app.post(
           .trim();
 
       if (
-        raw === "[DONE]"
+        raw ===
+        "[DONE]"
       ) {
 
         finishStream();
@@ -2197,22 +2419,13 @@ app.post(
             choice?.delta
           ) {
 
-            // ------------------------------------------------
-            // IMPORTANT:
-            //
-            // For DavidAU's model, delta.content is passed
-            // through exactly as NVIDIA sends it.
-            //
-            // This matches:
-            //
-            // chunk.choices[0]?.delta?.content
-            //
-            // from the user's working OpenAI SDK example.
-            // ------------------------------------------------
+            // Do not modify DavidAU here because that model
+            // already uses the raw passthrough above.
 
             if (
               typeof choice.delta.content ===
-              "string" &&
+                "string" &&
+
               selectedModel.id !==
                 "llama3.3-8b-heretic"
             ) {
@@ -2222,11 +2435,6 @@ app.post(
                   choice.delta.content
                 );
             }
-
-            // ------------------------------------------------
-            // Do not remove reasoning fields when SHOW_REASONING
-            // is enabled.
-            // ------------------------------------------------
 
             if (
               !SHOW_REASONING
@@ -2261,6 +2469,7 @@ app.post(
           finished ||
           res.writableEnded
         ) {
+
           return;
         }
 
@@ -2275,7 +2484,8 @@ app.post(
           );
 
         buffer =
-          lines.pop() || "";
+          lines.pop() ||
+          "";
 
         for (
           const line of
@@ -2285,6 +2495,7 @@ app.post(
           if (
             finished
           ) {
+
             break;
           }
 
@@ -2333,6 +2544,7 @@ app.post(
           finished ||
           res.writableEnded
         ) {
+
           return;
         }
 
@@ -2372,6 +2584,7 @@ app.post(
         if (
           finished
         ) {
+
           return;
         }
 
@@ -2394,11 +2607,15 @@ app.post(
 // ============================================================
 
 app.use(
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
 
     if (
       res.headersSent
     ) {
+
       return;
     }
 

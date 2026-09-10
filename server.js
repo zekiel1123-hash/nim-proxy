@@ -343,7 +343,7 @@ const MODELS = {
     maxTokens: 32768,
 
     // Exact default used by the known-working request.
-    defaultMaxTokens: 1024,
+    defaultMaxTokens: 32768,
 
     temperature: 0.5,
     top_p: 1.0,

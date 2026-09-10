@@ -53,6 +53,7 @@ const NIM_API_BASE =
 const NIM_API_KEY =
   process.env.NIM_API_KEY;
 
+// Community / Deployment NIM endpoint.
 const COMMUNITY_NIM_API_BASE =
   process.env.COMMUNITY_NIM_API_BASE ||
   "https://nim.api.nvidia.com/v1";
@@ -103,7 +104,9 @@ const MODELS = {
   // ==========================================================
 
   "kimi-k3": {
-    id: "kimi-k3",
+
+    id:
+      "kimi-k3",
 
     upstream:
       "moonshotai/kimi-k3",
@@ -138,22 +141,37 @@ const MODELS = {
     },
 
     supports: {
-      top_p: false,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: true,
-      tools: true,
-      stream_options: true,
-      stop: false
+      top_p:
+        false,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        true,
+
+      tools:
+        true,
+
+      stream_options:
+        true,
+
+      stop:
+        false
     }
   },
 
   // ==========================================================
-  // DEEPSEEK V4 PRO
+  // DEEPSEEK V4 PRO 0813
   // ==========================================================
 
   "deepseek-v4-pro": {
-    id: "deepseek-v4-pro",
+
+    id:
+      "deepseek-v4-pro",
 
     upstream:
       "deepseek-ai/deepseek-v4-pro-0813",
@@ -191,22 +209,37 @@ const MODELS = {
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: true,
-      tools: true,
-      stream_options: false,
-      stop: false
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        true,
+
+      tools:
+        true,
+
+      stream_options:
+        false,
+
+      stop:
+        false
     }
   },
 
   // ==========================================================
-  // DEEPSEEK V4 FLASH
+  // DEEPSEEK V4 FLASH 0731
   // ==========================================================
 
   "deepseek-v4-flash": {
-    id: "deepseek-v4-flash",
+
+    id:
+      "deepseek-v4-flash",
 
     upstream:
       "deepseek-ai/deepseek-v4-flash-0731",
@@ -244,13 +277,26 @@ const MODELS = {
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: true,
-      tools: true,
-      stream_options: false,
-      stop: false
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        true,
+
+      tools:
+        true,
+
+      stream_options:
+        false,
+
+      stop:
+        false
     }
   },
 
@@ -259,7 +305,9 @@ const MODELS = {
   // ==========================================================
 
   "muse-glimmer-30b": {
-    id: "muse-glimmer-30b",
+
+    id:
+      "muse-glimmer-30b",
 
     upstream:
       "meta/muse-glimmer-30b",
@@ -300,13 +348,26 @@ const MODELS = {
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: true,
-      frequency_penalty: true,
-      seed: false,
-      tools: true,
-      stream_options: false,
-      stop: true
+      top_p:
+        true,
+
+      presence_penalty:
+        true,
+
+      frequency_penalty:
+        true,
+
+      seed:
+        false,
+
+      tools:
+        true,
+
+      stream_options:
+        false,
+
+      stop:
+        true
     }
   },
 
@@ -315,7 +376,9 @@ const MODELS = {
   // ==========================================================
 
   "nemotron-3-ultra": {
-    id: "nemotron-3-ultra",
+
+    id:
+      "nemotron-3-ultra",
 
     upstream:
       "nvidia/nemotron-3-ultra-550b-a55b",
@@ -347,13 +410,26 @@ const MODELS = {
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: false,
-      tools: true,
-      stream_options: false,
-      stop: true
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        false,
+
+      tools:
+        true,
+
+      stream_options:
+        false,
+
+      stop:
+        true
     }
   },
 
@@ -362,7 +438,9 @@ const MODELS = {
   // ==========================================================
 
   "gemma-4-31b": {
-    id: "gemma-4-31b",
+
+    id:
+      "gemma-4-31b",
 
     upstream:
       "google/gemma-4-31b-it",
@@ -394,22 +472,36 @@ const MODELS = {
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: false,
-      tools: true,
-      stream_options: false,
-      stop: false
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        false,
+
+      tools:
+        true,
+
+      stream_options:
+        false,
+
+      stop:
+        false
     }
   },
 
   // ==========================================================
-  // COMMUNITY
-  // DEEPSEEK-R1 DISTILL QWEN 32B UNCENSORED
+  // COMMUNITY / DEPLOYMENT
+  // DEEPSEEK-R1-DISTILL-QWEN-32B-UNCENSORED
   // ==========================================================
 
   "deepseek-r1-32b-uncensored": {
+
     id:
       "deepseek-r1-32b-uncensored",
 
@@ -446,22 +538,77 @@ const MODELS = {
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: false,
-      tools: false,
-      stream_options: false,
-      stop: false
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        false,
+
+      tools:
+        false,
+
+      stream_options:
+        false,
+
+      stop:
+        false
     }
   },
 
   // ==========================================================
-  // COMMUNITY
+  // COMMUNITY / DEPLOYMENT
   // DAVIDAU LLAMA 3.3 8B HERETIC
+  // ==========================================================
+  //
+  // EXACT MODEL:
+  //
+  // DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-
+  // Uncensored-Claude-4.5-Opus-High-Reasoning
+  //
+  // EXACT WORKING NVIDIA SDK REQUEST:
+  //
+  // baseURL:
+  //   https://nim.api.nvidia.com/v1
+  //
+  // model:
+  //   DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-
+  //   Uncensored-Claude-4.5-Opus-High-Reasoning
+  //
+  // temperature:
+  //   0.5
+  //
+  // top_p:
+  //   1
+  //
+  // max_tokens:
+  //   1024
+  //
+  // stream:
+  //   true
+  //
+  // IMPORTANT:
+  //
+  // No reasoning_effort.
+  // No chat_template_kwargs.
+  // No tools.
+  // No seed.
+  // No stop.
+  // No penalties.
+  // No stream_options.
+  //
+  // Client values are deliberately ignored for this model
+  // so the request remains identical to the known-working
+  // NVIDIA SDK example.
   // ==========================================================
 
   "llama3.3-8b-heretic": {
+
     id:
       "llama3.3-8b-heretic",
 
@@ -492,21 +639,32 @@ const MODELS = {
     top_p:
       1.0,
 
-    // The supplied working request does NOT use
-    // reasoning_effort or chat_template_kwargs.
     reasoning: {
       type:
         "none"
     },
 
     supports: {
-      top_p: true,
-      presence_penalty: false,
-      frequency_penalty: false,
-      seed: false,
-      tools: false,
-      stream_options: false,
-      stop: false
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        false,
+
+      tools:
+        false,
+
+      stream_options:
+        false,
+
+      stop:
+        false
     }
   }
 };
@@ -540,7 +698,9 @@ app.use(
 // HELPERS
 // ============================================================
 
-function getModel(modelName) {
+function getModel(
+  modelName
+) {
 
   if (
     modelName &&
@@ -556,7 +716,9 @@ function getModel(modelName) {
 // THINK TAG CLEANUP
 // ============================================================
 
-function stripThinkTags(text) {
+function stripThinkTags(
+  text
+) {
 
   if (
     typeof text !== "string"
@@ -571,15 +733,16 @@ function stripThinkTags(text) {
     )
     .replace(
       /<\/?think>/gi,
-      ""
-    );
+      "");
 }
 
 // ============================================================
 // MEDIA DETECTION
 // ============================================================
 
-function containsMedia(messages) {
+function containsMedia(
+  messages
+) {
 
   if (
     !Array.isArray(messages)
@@ -619,7 +782,9 @@ function containsMedia(messages) {
 // MESSAGE VALIDATION
 // ============================================================
 
-function validateMessages(messages) {
+function validateMessages(
+  messages
+) {
 
   if (
     !Array.isArray(messages)
@@ -717,7 +882,60 @@ function buildNvidiaRequest(
   model
 ) {
 
+  // ==========================================================
+  // EXACT DAVIDAU COMMUNITY REQUEST
+  // ==========================================================
+  //
+  // This is intentionally NOT processed through the generic
+  // model parameter system.
+  //
+  // It matches the user's known-working OpenAI SDK request:
+  //
+  // const completion = await openai.chat.completions.create({
+  //   model: "DavidAU/...",
+  //   messages: [...],
+  //   temperature: 0.5,
+  //   top_p: 1,
+  //   max_tokens: 1024,
+  //   stream: true,
+  // })
+  //
+  // Nothing else is sent.
+  // ==========================================================
+
+  if (
+    model.id ===
+    "llama3.3-8b-heretic"
+  ) {
+
+    return {
+
+      model:
+        "DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-Uncensored-Claude-4.5-Opus-High-Reasoning",
+
+      messages:
+        body.messages,
+
+      temperature:
+        0.5,
+
+      top_p:
+        1,
+
+      max_tokens:
+        1024,
+
+      stream:
+        true
+    };
+  }
+
+  // ==========================================================
+  // GENERIC REQUEST FOR ALL OTHER MODELS
+  // ==========================================================
+
   const request = {
+
     model:
       model.upstream,
 
@@ -787,10 +1005,14 @@ function buildNvidiaRequest(
   }
 
   maxTokens =
-    Number(maxTokens);
+    Number(
+      maxTokens
+    );
 
   if (
-    !Number.isFinite(maxTokens)
+    !Number.isFinite(
+      maxTokens
+    )
   ) {
 
     maxTokens =
@@ -799,12 +1021,16 @@ function buildNvidiaRequest(
   }
 
   maxTokens =
-    Math.floor(maxTokens);
+    Math.floor(
+      maxTokens
+    );
 
   if (
     maxTokens < 1
   ) {
-    maxTokens = 1;
+
+    maxTokens =
+      1;
   }
 
   if (
@@ -915,7 +1141,8 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   if (
-    model.id === "kimi-k3"
+    model.id ===
+    "kimi-k3"
   ) {
 
     request.reasoning_effort =
@@ -930,8 +1157,10 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   else if (
-    model.id === "deepseek-v4-pro" ||
-    model.id === "deepseek-v4-flash"
+    model.id ===
+      "deepseek-v4-pro" ||
+    model.id ===
+      "deepseek-v4-flash"
   ) {
 
     request.reasoning_effort =
@@ -956,7 +1185,8 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   else if (
-    model.id === "muse-glimmer-30b"
+    model.id ===
+    "muse-glimmer-30b"
   ) {
 
     request.reasoning_effort =
@@ -981,10 +1211,12 @@ function buildNvidiaRequest(
   // ----------------------------------------------------------
 
   else if (
-    model.id === "nemotron-3-ultra"
+    model.id ===
+    "nemotron-3-ultra"
   ) {
 
     request.chat_template_kwargs = {
+
       ...(body.chat_template_kwargs || {}),
 
       enable_thinking:
@@ -995,14 +1227,16 @@ function buildNvidiaRequest(
   }
 
   // ----------------------------------------------------------
-  // GEMMA 4 31B
+  // GEMMA 4 31B IT
   // ----------------------------------------------------------
 
   else if (
-    model.id === "gemma-4-31b"
+    model.id ===
+    "gemma-4-31b"
   ) {
 
     request.chat_template_kwargs = {
+
       ...(body.chat_template_kwargs || {}),
 
       enable_thinking:
@@ -1012,22 +1246,70 @@ function buildNvidiaRequest(
     };
   }
 
-  // ----------------------------------------------------------
-  // COMMUNITY MODELS
-  // ----------------------------------------------------------
-  //
-  // Intentionally no reasoning_effort.
-  // Intentionally no chat_template_kwargs.
-  //
-  // This keeps both Community models compatible with
-  // their supplied working OpenAI SDK request.
-  // ----------------------------------------------------------
-
   return request;
 }
 
 // ============================================================
-// ERROR MESSAGE
+// REASONING NORMALIZATION
+// ============================================================
+
+function normalizeChunk(
+  data
+) {
+
+  if (
+    !data ||
+    typeof data !== "object"
+  ) {
+    return data;
+  }
+
+  if (
+    Array.isArray(
+      data.choices
+    )
+  ) {
+
+    for (
+      const choice of data.choices
+    ) {
+
+      const delta =
+        choice?.delta;
+
+      if (
+        !delta
+      ) {
+        continue;
+      }
+
+      if (
+        typeof delta.content ===
+        "string"
+      ) {
+
+        delta.content =
+          stripThinkTags(
+            delta.content
+          );
+      }
+
+      if (
+        !SHOW_REASONING
+      ) {
+
+        delete delta.reasoning;
+
+        delete delta.reasoning_content;
+      }
+    }
+  }
+
+  return data;
+}
+
+// ============================================================
+// SAFE ERROR MESSAGE
 // ============================================================
 
 function extractErrorMessage(
@@ -1035,26 +1317,32 @@ function extractErrorMessage(
 ) {
 
   if (
-    typeof responseData === "string"
+    typeof responseData ===
+    "string"
   ) {
+
     return responseData;
   }
 
   if (
     responseData?.error?.message
   ) {
+
     return responseData.error.message;
   }
 
   if (
-    typeof responseData?.error === "string"
+    typeof responseData?.error ===
+    "string"
   ) {
+
     return responseData.error;
   }
 
   if (
     responseData?.message
   ) {
+
     return responseData.message;
   }
 
@@ -1090,7 +1378,9 @@ function sendOpenAIError(
   res
     .status(status)
     .json({
+
       error: {
+
         message,
 
         type:
@@ -1134,6 +1424,7 @@ app.get(
           MODELS
         ).map(
           model => ({
+
             id:
               model.id,
 
@@ -1297,7 +1588,7 @@ app.post(
     }
 
     // ========================================================
-    // BUILD REQUEST
+    // BUILD NVIDIA REQUEST
     // ========================================================
 
     const primaryRequest =
@@ -1306,17 +1597,15 @@ app.post(
         selectedModel
       );
 
-    const selectedApiBase =
-      selectedModel.apiBase ||
-      NIM_API_BASE;
-
     console.log(
       `[Request] ${selectedModel.id} -> ` +
-      `${selectedModel.upstream} [STREAMING]`
+      `${selectedModel.upstream} ` +
+      `[STREAMING]`
     );
 
     console.log(
-      `[Endpoint] ${selectedApiBase}`
+      `[Endpoint] ` +
+      `${selectedModel.apiBase || NIM_API_BASE}`
     );
 
     console.log(
@@ -1338,11 +1627,12 @@ app.post(
       upstreamResponse =
         await axios.post(
 
-          `${selectedApiBase}/chat/completions`,
+          `${selectedModel.apiBase || NIM_API_BASE}/chat/completions`,
 
           primaryRequest,
 
           {
+
             headers: {
 
               Authorization:
@@ -1394,11 +1684,14 @@ app.post(
 
           const fallbackRequest =
             buildNvidiaRequest(
+
               {
                 ...body,
+
                 model:
                   FALLBACK_MODEL
               },
+
               fallbackModel
             );
 
@@ -1410,6 +1703,7 @@ app.post(
               fallbackRequest,
 
               {
+
                 headers: {
 
                   Authorization:
@@ -1501,7 +1795,7 @@ app.post(
         }
 
       } catch {
-        // Ignore stream read failure.
+        // Ignore stream-read failure.
       }
 
       let parsedError =
@@ -1551,11 +1845,14 @@ app.post(
 
           const fallbackRequest =
             buildNvidiaRequest(
+
               {
                 ...body,
+
                 model:
                   FALLBACK_MODEL
               },
+
               fallbackModel
             );
 
@@ -1567,6 +1864,7 @@ app.post(
               fallbackRequest,
 
               {
+
                 headers: {
 
                   Authorization:
@@ -1660,7 +1958,7 @@ app.post(
             fallbackResponse;
 
           selectedModel =
-            fallbackModel;
+            MODELS[FALLBACK_MODEL];
 
           console.log(
             `[Fallback] Now streaming from ` +
@@ -1899,9 +2197,24 @@ app.post(
             choice?.delta
           ) {
 
+            // ------------------------------------------------
+            // IMPORTANT:
+            //
+            // For DavidAU's model, delta.content is passed
+            // through exactly as NVIDIA sends it.
+            //
+            // This matches:
+            //
+            // chunk.choices[0]?.delta?.content
+            //
+            // from the user's working OpenAI SDK example.
+            // ------------------------------------------------
+
             if (
               typeof choice.delta.content ===
-              "string"
+              "string" &&
+              selectedModel.id !==
+                "llama3.3-8b-heretic"
             ) {
 
               choice.delta.content =
@@ -1909,6 +2222,11 @@ app.post(
                   choice.delta.content
                 );
             }
+
+            // ------------------------------------------------
+            // Do not remove reasoning fields when SHOW_REASONING
+            // is enabled.
+            // ------------------------------------------------
 
             if (
               !SHOW_REASONING

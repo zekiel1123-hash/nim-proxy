@@ -2,7 +2,7 @@
 // NVIDIA NIM -> OpenAI-Compatible Streaming Proxy
 // ============================================================
 //
-// MODELS
+// CURRENT MODELS
 //
 // kimi-k3
 //   -> moonshotai/kimi-k3
@@ -22,8 +22,14 @@
 // gemma-4-31b
 //   -> google/gemma-4-31b-it
 //
+// COMMUNITY / DEPLOYMENT
+//
 // deepseek-r1-32b-uncensored
 //   -> nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
+//   -> https://nim.api.nvidia.com/v1
+//
+// llama3.3-8b-heretic
+//   -> DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-Uncensored-Claude-4.5-Opus-High-Reasoning
 //   -> https://nim.api.nvidia.com/v1
 //
 // FALLBACK
@@ -44,20 +50,21 @@ const NIM_API_BASE =
   process.env.NIM_API_BASE ||
   "https://integrate.api.nvidia.com/v1";
 
+const NIM_API_KEY =
+  process.env.NIM_API_KEY;
+
 const COMMUNITY_NIM_API_BASE =
   process.env.COMMUNITY_NIM_API_BASE ||
   "https://nim.api.nvidia.com/v1";
-
-const NIM_API_KEY =
-  process.env.NIM_API_KEY;
 
 // ============================================================
 // CONFIGURATION
 // ============================================================
 
 const SHOW_REASONING =
-  String(process.env.SHOW_REASONING || "true").toLowerCase() ===
-  "true";
+  String(
+    process.env.SHOW_REASONING || "true"
+  ).toLowerCase() === "true";
 
 const DEFAULT_KIMI_REASONING =
   process.env.KIMI_REASONING_EFFORT || "high";
@@ -82,7 +89,8 @@ const DEFAULT_GEMMA_THINKING =
 // FALLBACK
 // ============================================================
 
-const FALLBACK_MODEL = "gemma-4-31b";
+const FALLBACK_MODEL =
+  "gemma-4-31b";
 
 // ============================================================
 // MODEL DEFINITIONS
@@ -96,20 +104,37 @@ const MODELS = {
 
   "kimi-k3": {
     id: "kimi-k3",
-    upstream: "moonshotai/kimi-k3",
-    owner: "moonshotai",
 
-    multimodal: true,
+    upstream:
+      "moonshotai/kimi-k3",
 
-    contextWindow: 1048576,
-    maxTokens: 65536,
+    owner:
+      "moonshotai",
 
-    temperature: 1.0,
+    multimodal:
+      true,
+
+    contextWindow:
+      1048576,
+
+    maxTokens:
+      65536,
+
+    temperature:
+      1.0,
 
     reasoning: {
-      type: "reasoning_effort",
-      allowed: ["low", "high", "max"],
-      default: DEFAULT_KIMI_REASONING
+      type:
+        "reasoning_effort",
+
+      allowed: [
+        "low",
+        "high",
+        "max"
+      ],
+
+      default:
+        DEFAULT_KIMI_REASONING
     },
 
     supports: {
@@ -129,21 +154,40 @@ const MODELS = {
 
   "deepseek-v4-pro": {
     id: "deepseek-v4-pro",
-    upstream: "deepseek-ai/deepseek-v4-pro-0813",
-    owner: "deepseek-ai",
 
-    multimodal: false,
+    upstream:
+      "deepseek-ai/deepseek-v4-pro-0813",
 
-    contextWindow: 1000000,
-    maxTokens: 16384,
+    owner:
+      "deepseek-ai",
 
-    temperature: 1.0,
-    top_p: 0.95,
+    multimodal:
+      false,
+
+    contextWindow:
+      1000000,
+
+    maxTokens:
+      16384,
+
+    temperature:
+      1.0,
+
+    top_p:
+      0.95,
 
     reasoning: {
-      type: "reasoning_effort",
-      allowed: ["low", "high", "max"],
-      default: DEFAULT_DEEPSEEK_REASONING
+      type:
+        "reasoning_effort",
+
+      allowed: [
+        "low",
+        "high",
+        "max"
+      ],
+
+      default:
+        DEFAULT_DEEPSEEK_REASONING
     },
 
     supports: {
@@ -163,21 +207,40 @@ const MODELS = {
 
   "deepseek-v4-flash": {
     id: "deepseek-v4-flash",
-    upstream: "deepseek-ai/deepseek-v4-flash-0731",
-    owner: "deepseek-ai",
 
-    multimodal: false,
+    upstream:
+      "deepseek-ai/deepseek-v4-flash-0731",
 
-    contextWindow: 1000000,
-    maxTokens: 16384,
+    owner:
+      "deepseek-ai",
 
-    temperature: 1.0,
-    top_p: 0.95,
+    multimodal:
+      false,
+
+    contextWindow:
+      1000000,
+
+    maxTokens:
+      16384,
+
+    temperature:
+      1.0,
+
+    top_p:
+      0.95,
 
     reasoning: {
-      type: "reasoning_effort",
-      allowed: ["low", "high", "max"],
-      default: DEFAULT_DEEPSEEK_REASONING
+      type:
+        "reasoning_effort",
+
+      allowed: [
+        "low",
+        "high",
+        "max"
+      ],
+
+      default:
+        DEFAULT_DEEPSEEK_REASONING
     },
 
     supports: {
@@ -197,19 +260,32 @@ const MODELS = {
 
   "muse-glimmer-30b": {
     id: "muse-glimmer-30b",
-    upstream: "meta/muse-glimmer-30b",
-    owner: "meta",
 
-    multimodal: true,
+    upstream:
+      "meta/muse-glimmer-30b",
 
-    contextWindow: 131072,
-    maxTokens: 131072,
+    owner:
+      "meta",
 
-    temperature: 0.95,
-    top_p: 1.0,
+    multimodal:
+      true,
+
+    contextWindow:
+      131072,
+
+    maxTokens:
+      131072,
+
+    temperature:
+      0.95,
+
+    top_p:
+      1.0,
 
     reasoning: {
-      type: "reasoning_effort",
+      type:
+        "reasoning_effort",
+
       allowed: [
         "none",
         "minimal",
@@ -218,7 +294,9 @@ const MODELS = {
         "high",
         "max"
       ],
-      default: DEFAULT_MUSE_REASONING
+
+      default:
+        DEFAULT_MUSE_REASONING
     },
 
     supports: {
@@ -238,20 +316,34 @@ const MODELS = {
 
   "nemotron-3-ultra": {
     id: "nemotron-3-ultra",
-    upstream: "nvidia/nemotron-3-ultra-550b-a55b",
-    owner: "nvidia",
 
-    multimodal: false,
+    upstream:
+      "nvidia/nemotron-3-ultra-550b-a55b",
 
-    contextWindow: 1000000,
-    maxTokens: 32768,
+    owner:
+      "nvidia",
 
-    temperature: 1.0,
-    top_p: 0.95,
+    multimodal:
+      false,
+
+    contextWindow:
+      1000000,
+
+    maxTokens:
+      32768,
+
+    temperature:
+      1.0,
+
+    top_p:
+      0.95,
 
     reasoning: {
-      type: "chat_template_thinking",
-      default: DEFAULT_NEMOTRON_THINKING
+      type:
+        "chat_template_thinking",
+
+      default:
+        DEFAULT_NEMOTRON_THINKING
     },
 
     supports: {
@@ -271,20 +363,34 @@ const MODELS = {
 
   "gemma-4-31b": {
     id: "gemma-4-31b",
-    upstream: "google/gemma-4-31b-it",
-    owner: "google",
 
-    multimodal: true,
+    upstream:
+      "google/gemma-4-31b-it",
 
-    contextWindow: 262144,
-    maxTokens: 16384,
+    owner:
+      "google",
 
-    temperature: 1.0,
-    top_p: 0.95,
+    multimodal:
+      true,
+
+    contextWindow:
+      262144,
+
+    maxTokens:
+      16384,
+
+    temperature:
+      1.0,
+
+    top_p:
+      0.95,
 
     reasoning: {
-      type: "chat_template_thinking",
-      default: DEFAULT_GEMMA_THINKING
+      type:
+        "chat_template_thinking",
+
+      default:
+        DEFAULT_GEMMA_THINKING
     },
 
     supports: {
@@ -299,59 +405,98 @@ const MODELS = {
   },
 
   // ==========================================================
-  // COMMUNITY DEEPSEEK R1 DISTILL 32B UNCENSORED
-  // ==========================================================
-  //
-  // This is intentionally handled by the SAME standard
-  // streaming code as the other DeepSeek models.
-  //
-  // The only differences are:
-  //
-  //   endpoint:
-  //     https://nim.api.nvidia.com/v1
-  //
-  //   model:
-  //     nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-  //
-  //   defaults:
-  //     temperature = 0.5
-  //     top_p       = 1.0
-  //     max_tokens  = 1024
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  // No tools.
-  //
+  // COMMUNITY
+  // DEEPSEEK-R1 DISTILL QWEN 32B UNCENSORED
   // ==========================================================
 
   "deepseek-r1-32b-uncensored": {
-    id: "deepseek-r1-32b-uncensored",
+    id:
+      "deepseek-r1-32b-uncensored",
 
     upstream:
       "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored",
 
-    owner: "nicoboss",
+    owner:
+      "nicoboss",
 
     apiBase:
       COMMUNITY_NIM_API_BASE,
 
-    multimodal: false,
+    multimodal:
+      false,
 
-    contextWindow: 131072,
+    contextWindow:
+      131072,
 
-    // Maximum allowed by the proxy.
-    maxTokens: 32768,
+    maxTokens:
+      32768,
 
-    // Exact default used by the known-working request.
-    defaultMaxTokens: 32768,
+    defaultMaxTokens:
+      1024,
 
-    temperature: 0.5,
-    top_p: 1.0,
+    temperature:
+      0.5,
 
-    // This model does not receive reasoning_effort
-    // or chat_template_kwargs.
+    top_p:
+      1.0,
+
     reasoning: {
-      type: "none"
+      type:
+        "none"
+    },
+
+    supports: {
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: false,
+      tools: false,
+      stream_options: false,
+      stop: false
+    }
+  },
+
+  // ==========================================================
+  // COMMUNITY
+  // DAVIDAU LLAMA 3.3 8B HERETIC
+  // ==========================================================
+
+  "llama3.3-8b-heretic": {
+    id:
+      "llama3.3-8b-heretic",
+
+    upstream:
+      "DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-Uncensored-Claude-4.5-Opus-High-Reasoning",
+
+    owner:
+      "DavidAU",
+
+    apiBase:
+      COMMUNITY_NIM_API_BASE,
+
+    multimodal:
+      false,
+
+    contextWindow:
+      131072,
+
+    maxTokens:
+      32768,
+
+    defaultMaxTokens:
+      1024,
+
+    temperature:
+      0.5,
+
+    top_p:
+      1.0,
+
+    // The supplied working request does NOT use
+    // reasoning_effort or chat_template_kwargs.
+    reasoning: {
+      type:
+        "none"
     },
 
     supports: {
@@ -370,26 +515,33 @@ const MODELS = {
 // EXPRESS MIDDLEWARE
 // ============================================================
 
-app.use(cors());
+app.use(
+  cors()
+);
 
 app.use(
   express.json({
-    limit: "100mb"
+    limit:
+      "100mb"
   })
 );
 
 app.use(
   express.urlencoded({
-    limit: "100mb",
-    extended: true
+    limit:
+      "100mb",
+
+    extended:
+      true
   })
 );
 
 // ============================================================
-// MODEL LOOKUP
+// HELPERS
 // ============================================================
 
 function getModel(modelName) {
+
   if (
     modelName &&
     MODELS[modelName]
@@ -405,6 +557,7 @@ function getModel(modelName) {
 // ============================================================
 
 function stripThinkTags(text) {
+
   if (
     typeof text !== "string"
   ) {
@@ -427,19 +580,28 @@ function stripThinkTags(text) {
 // ============================================================
 
 function containsMedia(messages) {
-  if (!Array.isArray(messages)) {
+
+  if (
+    !Array.isArray(messages)
+  ) {
     return false;
   }
 
-  for (const message of messages) {
+  for (
+    const message of messages
+  ) {
 
     if (
-      !Array.isArray(message?.content)
+      !Array.isArray(
+        message?.content
+      )
     ) {
       continue;
     }
 
-    for (const part of message.content) {
+    for (
+      const part of message.content
+    ) {
 
       if (
         part?.type === "image_url" ||
@@ -459,11 +621,15 @@ function containsMedia(messages) {
 
 function validateMessages(messages) {
 
-  if (!Array.isArray(messages)) {
+  if (
+    !Array.isArray(messages)
+  ) {
     return "messages must be an array";
   }
 
-  if (messages.length === 0) {
+  if (
+    messages.length === 0
+  ) {
     return "messages cannot be empty";
   }
 
@@ -473,19 +639,24 @@ function validateMessages(messages) {
     i++
   ) {
 
-    const message = messages[i];
+    const message =
+      messages[i];
 
     if (
       !message ||
       typeof message !== "object"
     ) {
-      return `messages[${i}] must be an object`;
+      return (
+        `messages[${i}] must be an object`
+      );
     }
 
     if (
       typeof message.role !== "string"
     ) {
-      return `messages[${i}].role must be a string`;
+      return (
+        `messages[${i}].role must be a string`
+      );
     }
 
     if (
@@ -502,11 +673,11 @@ function validateMessages(messages) {
 }
 
 // ============================================================
-// REASONING EFFORT
+// REASONING VALIDATION
 // ============================================================
 
 function getReasoningEffort(
-  body,
+  requestBody,
   model
 ) {
 
@@ -518,7 +689,7 @@ function getReasoningEffort(
   }
 
   const requested =
-    body.reasoning_effort ??
+    requestBody.reasoning_effort ??
     model.reasoning.default;
 
   if (
@@ -538,56 +709,6 @@ function getReasoningEffort(
 }
 
 // ============================================================
-// MAX TOKEN VALUE
-// ============================================================
-
-function getMaxTokens(
-  body,
-  model
-) {
-
-  let maxTokens =
-    body.max_tokens;
-
-  if (
-    maxTokens === undefined ||
-    maxTokens === null
-  ) {
-    maxTokens =
-      model.defaultMaxTokens ??
-      model.maxTokens;
-  }
-
-  maxTokens =
-    Number(maxTokens);
-
-  if (
-    !Number.isFinite(maxTokens)
-  ) {
-    maxTokens =
-      model.defaultMaxTokens ??
-      model.maxTokens;
-  }
-
-  maxTokens =
-    Math.floor(maxTokens);
-
-  if (maxTokens < 1) {
-    maxTokens = 1;
-  }
-
-  if (
-    maxTokens >
-    model.maxTokens
-  ) {
-    maxTokens =
-      model.maxTokens;
-  }
-
-  return maxTokens;
-}
-
-// ============================================================
 // BUILD NVIDIA REQUEST
 // ============================================================
 
@@ -597,12 +718,14 @@ function buildNvidiaRequest(
 ) {
 
   const request = {
-    model: model.upstream,
+    model:
+      model.upstream,
 
     messages:
       body.messages,
 
-    stream: true
+    stream:
+      true
   };
 
   // ==========================================================
@@ -612,9 +735,12 @@ function buildNvidiaRequest(
   if (
     body.temperature !== undefined
   ) {
+
     request.temperature =
       body.temperature;
+
   } else {
+
     request.temperature =
       model.temperature;
   }
@@ -630,11 +756,14 @@ function buildNvidiaRequest(
     if (
       body.top_p !== undefined
     ) {
+
       request.top_p =
         body.top_p;
+
     } else if (
       model.top_p !== undefined
     ) {
+
       request.top_p =
         model.top_p;
     }
@@ -644,11 +773,51 @@ function buildNvidiaRequest(
   // MAX TOKENS
   // ==========================================================
 
+  let maxTokens =
+    body.max_tokens;
+
+  if (
+    maxTokens === undefined ||
+    maxTokens === null
+  ) {
+
+    maxTokens =
+      model.defaultMaxTokens ??
+      model.maxTokens;
+  }
+
+  maxTokens =
+    Number(maxTokens);
+
+  if (
+    !Number.isFinite(maxTokens)
+  ) {
+
+    maxTokens =
+      model.defaultMaxTokens ??
+      model.maxTokens;
+  }
+
+  maxTokens =
+    Math.floor(maxTokens);
+
+  if (
+    maxTokens < 1
+  ) {
+    maxTokens = 1;
+  }
+
+  if (
+    maxTokens >
+    model.maxTokens
+  ) {
+
+    maxTokens =
+      model.maxTokens;
+  }
+
   request.max_tokens =
-    getMaxTokens(
-      body,
-      model
-    );
+    maxTokens;
 
   // ==========================================================
   // SEED
@@ -658,6 +827,7 @@ function buildNvidiaRequest(
     model.supports.seed &&
     body.seed !== undefined
   ) {
+
     request.seed =
       body.seed;
   }
@@ -670,6 +840,7 @@ function buildNvidiaRequest(
     model.supports.stop &&
     body.stop !== undefined
   ) {
+
     request.stop =
       body.stop;
   }
@@ -682,6 +853,7 @@ function buildNvidiaRequest(
     model.supports.tools &&
     body.tools !== undefined
   ) {
+
     request.tools =
       body.tools;
   }
@@ -690,6 +862,7 @@ function buildNvidiaRequest(
     model.supports.tools &&
     body.tool_choice !== undefined
   ) {
+
     request.tool_choice =
       body.tool_choice;
   }
@@ -702,6 +875,7 @@ function buildNvidiaRequest(
     model.supports.stream_options &&
     body.stream_options !== undefined
   ) {
+
     request.stream_options =
       body.stream_options;
   }
@@ -714,6 +888,7 @@ function buildNvidiaRequest(
     model.supports.presence_penalty &&
     body.presence_penalty !== undefined
   ) {
+
     request.presence_penalty =
       body.presence_penalty;
   }
@@ -726,6 +901,7 @@ function buildNvidiaRequest(
     model.supports.frequency_penalty &&
     body.frequency_penalty !== undefined
   ) {
+
     request.frequency_penalty =
       body.frequency_penalty;
   }
@@ -734,9 +910,12 @@ function buildNvidiaRequest(
   // MODEL-SPECIFIC REASONING
   // ==========================================================
 
+  // ----------------------------------------------------------
+  // KIMI K3
+  // ----------------------------------------------------------
+
   if (
-    model.reasoning.type ===
-    "reasoning_effort"
+    model.id === "kimi-k3"
   ) {
 
     request.reasoning_effort =
@@ -746,15 +925,21 @@ function buildNvidiaRequest(
       );
   }
 
-  // ==========================================================
-  // DEEPSEEK V4
-  // ==========================================================
+  // ----------------------------------------------------------
+  // DEEPSEEK V4 PRO / FLASH
+  // ----------------------------------------------------------
 
-  if (
+  else if (
     model.id === "deepseek-v4-pro" ||
     model.id === "deepseek-v4-flash"
   ) {
 
+    request.reasoning_effort =
+      getReasoningEffort(
+        body,
+        model
+      );
+
     if (
       body.chat_template_kwargs &&
       typeof body.chat_template_kwargs ===
@@ -766,14 +951,20 @@ function buildNvidiaRequest(
     }
   }
 
-  // ==========================================================
+  // ----------------------------------------------------------
   // MUSE GLIMMER
-  // ==========================================================
+  // ----------------------------------------------------------
 
-  if (
+  else if (
     model.id === "muse-glimmer-30b"
   ) {
 
+    request.reasoning_effort =
+      getReasoningEffort(
+        body,
+        model
+      );
+
     if (
       body.chat_template_kwargs &&
       typeof body.chat_template_kwargs ===
@@ -785,11 +976,11 @@ function buildNvidiaRequest(
     }
   }
 
-  // ==========================================================
+  // ----------------------------------------------------------
   // NEMOTRON 3 ULTRA
-  // ==========================================================
+  // ----------------------------------------------------------
 
-  if (
+  else if (
     model.id === "nemotron-3-ultra"
   ) {
 
@@ -799,15 +990,15 @@ function buildNvidiaRequest(
       enable_thinking:
         body.chat_template_kwargs
           ?.enable_thinking ??
-        model.reasoning.default
+        DEFAULT_NEMOTRON_THINKING
     };
   }
 
-  // ==========================================================
+  // ----------------------------------------------------------
   // GEMMA 4 31B
-  // ==========================================================
+  // ----------------------------------------------------------
 
-  if (
+  else if (
     model.id === "gemma-4-31b"
   ) {
 
@@ -817,30 +1008,26 @@ function buildNvidiaRequest(
       enable_thinking:
         body.chat_template_kwargs
           ?.enable_thinking ??
-        model.reasoning.default
+        DEFAULT_GEMMA_THINKING
     };
   }
 
-  // ==========================================================
-  // COMMUNITY DEEPSEEK
-  // ==========================================================
+  // ----------------------------------------------------------
+  // COMMUNITY MODELS
+  // ----------------------------------------------------------
   //
-  // Nothing is added here.
+  // Intentionally no reasoning_effort.
+  // Intentionally no chat_template_kwargs.
   //
-  // It is deliberately treated like a normal
-  // OpenAI-compatible DeepSeek model.
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  // No tools.
-  //
-  // ==========================================================
+  // This keeps both Community models compatible with
+  // their supplied working OpenAI SDK request.
+  // ----------------------------------------------------------
 
   return request;
 }
 
 // ============================================================
-// ERROR MESSAGE EXTRACTION
+// ERROR MESSAGE
 // ============================================================
 
 function extractErrorMessage(
@@ -860,8 +1047,7 @@ function extractErrorMessage(
   }
 
   if (
-    typeof responseData?.error ===
-    "string"
+    typeof responseData?.error === "string"
   ) {
     return responseData.error;
   }
@@ -873,10 +1059,13 @@ function extractErrorMessage(
   }
 
   try {
+
     return JSON.stringify(
       responseData
     );
+
   } catch {
+
     return "NVIDIA API request failed";
   }
 }
@@ -892,7 +1081,9 @@ function sendOpenAIError(
   code = "nvidia_api_error"
 ) {
 
-  if (res.headersSent) {
+  if (
+    res.headersSent
+  ) {
     return;
   }
 
@@ -901,96 +1092,13 @@ function sendOpenAIError(
     .json({
       error: {
         message,
-        type: "invalid_request_error",
+
+        type:
+          "invalid_request_error",
+
         code
       }
     });
-}
-
-// ============================================================
-// AXIOS REQUEST
-// ============================================================
-
-async function sendNvidiaRequest(
-  model,
-  request
-) {
-
-  const endpoint =
-    `${model.apiBase || NIM_API_BASE}/chat/completions`;
-
-  return axios.post(
-    endpoint,
-    request,
-    {
-      headers: {
-        Authorization:
-          `Bearer ${NIM_API_KEY}`,
-
-        "Content-Type":
-          "application/json",
-
-        Accept:
-          "text/event-stream"
-      },
-
-      responseType:
-        "stream",
-
-      // Long-running reasoning models can take
-      // a while to produce their first token.
-      timeout: 0,
-
-      // We handle HTTP status codes ourselves.
-      validateStatus:
-        () => true
-    }
-  );
-}
-
-// ============================================================
-// READ UPSTREAM ERROR STREAM
-// ============================================================
-
-async function readErrorStream(
-  stream
-) {
-
-  let text = "";
-
-  try {
-
-    for await (
-      const chunk of stream
-    ) {
-
-      text +=
-        chunk.toString("utf8");
-
-      if (
-        text.length >
-        100000
-      ) {
-        break;
-      }
-    }
-
-  } catch {
-    // Ignore stream read errors.
-  }
-
-  let parsed = text;
-
-  try {
-    parsed =
-      JSON.parse(text);
-  } catch {
-    // Keep text.
-  }
-
-  return extractErrorMessage(
-    parsed
-  );
 }
 
 // ============================================================
@@ -1002,9 +1110,12 @@ app.get(
   (req, res) => {
 
     res.json({
-      status: "ok",
 
-      streaming: true,
+      status:
+        "ok",
+
+      streaming:
+        true,
 
       api_base:
         NIM_API_BASE,
@@ -1019,7 +1130,9 @@ app.get(
         SHOW_REASONING,
 
       models:
-        Object.values(MODELS).map(
+        Object.values(
+          MODELS
+        ).map(
           model => ({
             id:
               model.id,
@@ -1055,11 +1168,16 @@ app.get(
       );
 
     res.json({
-      object: "list",
+
+      object:
+        "list",
 
       data:
-        Object.values(MODELS).map(
+        Object.values(
+          MODELS
+        ).map(
           model => ({
+
             id:
               model.id,
 
@@ -1077,7 +1195,7 @@ app.get(
 );
 
 // ============================================================
-// OPENAI /v1/chat/completions
+// STREAMING CHAT COMPLETIONS
 // ============================================================
 
 app.post(
@@ -1144,7 +1262,9 @@ app.post(
     // UNKNOWN MODEL -> FALLBACK
     // ========================================================
 
-    if (!selectedModel) {
+    if (
+      !selectedModel
+    ) {
 
       console.warn(
         `[Fallback] Unknown model "${requestedModel}". ` +
@@ -1180,35 +1300,15 @@ app.post(
     // BUILD REQUEST
     // ========================================================
 
-    let primaryRequest;
-
-    try {
-
-      primaryRequest =
-        buildNvidiaRequest(
-          body,
-          selectedModel
-        );
-
-    } catch (error) {
-
-      console.error(
-        "[Request Build Error]",
-        error
+    const primaryRequest =
+      buildNvidiaRequest(
+        body,
+        selectedModel
       );
 
-      return sendOpenAIError(
-        res,
-        400,
-
-        error.message,
-
-        "request_build_error"
-      );
-    }
-
-    const endpoint =
-      `${selectedModel.apiBase || NIM_API_BASE}/chat/completions`;
+    const selectedApiBase =
+      selectedModel.apiBase ||
+      NIM_API_BASE;
 
     console.log(
       `[Request] ${selectedModel.id} -> ` +
@@ -1216,7 +1316,7 @@ app.post(
     );
 
     console.log(
-      `[Endpoint] ${selectedModel.apiBase || NIM_API_BASE}`
+      `[Endpoint] ${selectedApiBase}`
     );
 
     console.log(
@@ -1228,7 +1328,7 @@ app.post(
     );
 
     // ========================================================
-    // SEND PRIMARY REQUEST
+    // NVIDIA REQUEST
     // ========================================================
 
     let upstreamResponse;
@@ -1236,9 +1336,34 @@ app.post(
     try {
 
       upstreamResponse =
-        await sendNvidiaRequest(
-          selectedModel,
-          primaryRequest
+        await axios.post(
+
+          `${selectedApiBase}/chat/completions`,
+
+          primaryRequest,
+
+          {
+            headers: {
+
+              Authorization:
+                `Bearer ${NIM_API_KEY}`,
+
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "text/event-stream"
+            },
+
+            responseType:
+              "stream",
+
+            timeout:
+              0,
+
+            validateStatus:
+              () => true
+          }
         );
 
     } catch (error) {
@@ -1278,17 +1403,38 @@ app.post(
             );
 
           upstreamResponse =
-            await sendNvidiaRequest(
-              fallbackModel,
-              fallbackRequest
+            await axios.post(
+
+              `${fallbackModel.apiBase || NIM_API_BASE}/chat/completions`,
+
+              fallbackRequest,
+
+              {
+                headers: {
+
+                  Authorization:
+                    `Bearer ${NIM_API_KEY}`,
+
+                  "Content-Type":
+                    "application/json",
+
+                  Accept:
+                    "text/event-stream"
+                },
+
+                responseType:
+                  "stream",
+
+                timeout:
+                  0,
+
+                validateStatus:
+                  () => true
+              }
             );
 
           selectedModel =
             fallbackModel;
-
-          console.log(
-            `[Fallback] Now using ${selectedModel.upstream}`
-          );
 
         } catch (
           fallbackError
@@ -1323,7 +1469,7 @@ app.post(
     }
 
     // ========================================================
-    // HANDLE PRIMARY HTTP ERROR
+    // UPSTREAM HTTP ERROR BEFORE STREAM
     // ========================================================
 
     if (
@@ -1331,9 +1477,50 @@ app.post(
       upstreamResponse.status >= 300
     ) {
 
-      const upstreamMessage =
-        await readErrorStream(
+      let errorText =
+        "";
+
+      try {
+
+        for await (
+          const chunk of
           upstreamResponse.data
+        ) {
+
+          errorText +=
+            chunk.toString(
+              "utf8"
+            );
+
+          if (
+            errorText.length >
+            100000
+          ) {
+            break;
+          }
+        }
+
+      } catch {
+        // Ignore stream read failure.
+      }
+
+      let parsedError =
+        errorText;
+
+      try {
+
+        parsedError =
+          JSON.parse(
+            errorText
+          );
+
+      } catch {
+        // Keep string.
+      }
+
+      const upstreamMessage =
+        extractErrorMessage(
+          parsedError
         );
 
       console.error(
@@ -1373,9 +1560,34 @@ app.post(
             );
 
           const fallbackResponse =
-            await sendNvidiaRequest(
-              fallbackModel,
-              fallbackRequest
+            await axios.post(
+
+              `${fallbackModel.apiBase || NIM_API_BASE}/chat/completions`,
+
+              fallbackRequest,
+
+              {
+                headers: {
+
+                  Authorization:
+                    `Bearer ${NIM_API_KEY}`,
+
+                  "Content-Type":
+                    "application/json",
+
+                  Accept:
+                    "text/event-stream"
+                },
+
+                responseType:
+                  "stream",
+
+                timeout:
+                  0,
+
+                validateStatus:
+                  () => true
+              }
             );
 
           if (
@@ -1383,9 +1595,50 @@ app.post(
             fallbackResponse.status >= 300
           ) {
 
-            const fallbackMessage =
-              await readErrorStream(
+            let fallbackText =
+              "";
+
+            try {
+
+              for await (
+                const chunk of
                 fallbackResponse.data
+              ) {
+
+                fallbackText +=
+                  chunk.toString(
+                    "utf8"
+                  );
+
+                if (
+                  fallbackText.length >
+                  100000
+                ) {
+                  break;
+                }
+              }
+
+            } catch {
+              // Ignore.
+            }
+
+            let fallbackParsed =
+              fallbackText;
+
+            try {
+
+              fallbackParsed =
+                JSON.parse(
+                  fallbackText
+                );
+
+            } catch {
+              // Keep string.
+            }
+
+            const fallbackMessage =
+              extractErrorMessage(
+                fallbackParsed
               );
 
             console.error(
@@ -1395,7 +1648,6 @@ app.post(
 
             return sendOpenAIError(
               res,
-
               fallbackResponse.status,
 
               fallbackMessage,
@@ -1474,27 +1726,23 @@ app.post(
       "no"
     );
 
-    // Flush headers immediately when supported.
-    if (
-      typeof res.flushHeaders ===
-      "function"
-    ) {
-      res.flushHeaders();
-    }
-
     // ========================================================
     // STREAM STATE
     // ========================================================
 
-    let buffer = "";
+    let buffer =
+      "";
 
-    let finished = false;
+    let finished =
+      false;
 
     // ========================================================
     // WRITE SSE
     // ========================================================
 
-    function writeSSE(data) {
+    function writeSSE(
+      data
+    ) {
 
       if (
         finished ||
@@ -1509,7 +1757,9 @@ app.post(
           `data: ${JSON.stringify(data)}\n\n`
         );
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           "[SSE Write Error]",
@@ -1524,11 +1774,14 @@ app.post(
 
     function finishStream() {
 
-      if (finished) {
+      if (
+        finished
+      ) {
         return;
       }
 
-      finished = true;
+      finished =
+        true;
 
       try {
 
@@ -1557,7 +1810,9 @@ app.post(
     // PROCESS SSE LINE
     // ========================================================
 
-    function processSSELine(line) {
+    function processSSELine(
+      line
+    ) {
 
       line =
         line.replace(
@@ -1571,7 +1826,6 @@ app.post(
         return;
       }
 
-      // SSE comment / heartbeat.
       if (
         line.startsWith(":")
       ) {
@@ -1579,7 +1833,9 @@ app.post(
       }
 
       if (
-        !line.startsWith("data:")
+        !line.startsWith(
+          "data:"
+        )
       ) {
         return;
       }
@@ -1603,9 +1859,13 @@ app.post(
       try {
 
         parsed =
-          JSON.parse(raw);
+          JSON.parse(
+            raw
+          );
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           "[SSE JSON Parse Error]",
@@ -1621,7 +1881,7 @@ app.post(
       }
 
       // ======================================================
-      // NORMALIZE DELTA
+      // NORMALIZE RESPONSE
       // ======================================================
 
       if (
@@ -1635,41 +1895,35 @@ app.post(
           parsed.choices
         ) {
 
-          const delta =
-            choice?.delta;
-
-          if (!delta) {
-            continue;
-          }
-
-          // Remove explicit <think> wrappers from
-          // normal content without changing the
-          // reasoning_content field.
           if (
-            typeof delta.content ===
-            "string"
+            choice?.delta
           ) {
 
-            delta.content =
-              stripThinkTags(
-                delta.content
-              );
-          }
+            if (
+              typeof choice.delta.content ===
+              "string"
+            ) {
 
-          // Optional reasoning display toggle.
-          if (
-            !SHOW_REASONING
-          ) {
+              choice.delta.content =
+                stripThinkTags(
+                  choice.delta.content
+                );
+            }
 
-            delete delta.reasoning;
+            if (
+              !SHOW_REASONING
+            ) {
 
-            delete delta.reasoning_content;
+              delete choice.delta.reasoning;
+
+              delete choice.delta.reasoning_content;
+            }
           }
         }
       }
 
       // ======================================================
-      // SEND CHUNK TO CLIENT
+      // SEND TO CLIENT
       // ======================================================
 
       writeSSE(
@@ -1698,7 +1952,9 @@ app.post(
           );
 
         const lines =
-          buffer.split("\n");
+          buffer.split(
+            "\n"
+          );
 
         buffer =
           lines.pop() || "";
@@ -1708,7 +1964,9 @@ app.post(
           lines
         ) {
 
-          if (finished) {
+          if (
+            finished
+          ) {
             break;
           }
 
@@ -1761,7 +2019,9 @@ app.post(
         }
 
         writeSSE({
+
           error: {
+
             message:
               error.message ||
               "NVIDIA streaming error",
@@ -1771,7 +2031,8 @@ app.post(
           }
         });
 
-        finished = true;
+        finished =
+          true;
 
         if (
           !res.writableEnded
@@ -1790,11 +2051,14 @@ app.post(
       "close",
       () => {
 
-        if (finished) {
+        if (
+          finished
+        ) {
           return;
         }
 
-        finished = true;
+        finished =
+          true;
 
         if (
           upstreamResponse?.data?.destroy
@@ -1897,7 +2161,9 @@ app.listen(
 
     for (
       const model of
-      Object.values(MODELS)
+      Object.values(
+        MODELS
+      )
     ) {
 
       console.log(

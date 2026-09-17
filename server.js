@@ -97,7 +97,7 @@ const DEFAULT_GEMMA_THINKING =
 // ============================================================
 
 const FALLBACK_MODEL =
-  "gemma-4-31b";
+  "kimi-k3";
 
 // ============================================================
 // MODEL DEFINITIONS

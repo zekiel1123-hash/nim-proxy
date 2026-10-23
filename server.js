@@ -97,7 +97,7 @@ const DEFAULT_GEMMA_THINKING =
 // ============================================================
 
 const FALLBACK_MODEL =
-  "kimi-k3";
+  "gemma-4-31b";
 
 // ============================================================
 // MODEL DEFINITIONS
@@ -106,144 +106,7 @@ const FALLBACK_MODEL =
 const MODELS = {
 
   // ==========================================================
-  // KIMI K3
-  // ==========================================================
-
-  "kimi-k3": {
-
-    id:
-      "kimi-k3",
-
-    upstream:
-      "moonshotai/kimi-k3",
-
-    owner:
-      "moonshotai",
-
-    multimodal:
-      true,
-
-    contextWindow:
-      1048576,
-
-    maxTokens:
-      65536,
-
-    temperature:
-      1.0,
-
-    reasoning: {
-
-      type:
-        "reasoning_effort",
-
-      allowed: [
-        "low",
-        "high",
-        "max"
-      ],
-
-      default:
-        DEFAULT_KIMI_REASONING
-    },
-
-    supports: {
-
-      top_p:
-        false,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        true,
-
-      tools:
-        true,
-
-      stream_options:
-        true,
-
-      stop:
-        false
-    }
-  },
-
-  // ==========================================================
-  // DEEPSEEK V4 PRO 0813
-  // ==========================================================
-
-  "deepseek-v4-pro": {
-
-    id:
-      "deepseek-v4-pro",
-
-    upstream:
-      "deepseek-ai/deepseek-v4-pro-0813",
-
-    owner:
-      "deepseek-ai",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      1000000,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
-
-    reasoning: {
-
-      type:
-        "reasoning_effort",
-
-      allowed: [
-        "low",
-        "high",
-        "max"
-      ],
-
-      default:
-        DEFAULT_DEEPSEEK_REASONING
-    },
-
-    supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        true,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
-    }
-  },
-
-  // ==========================================================
-  // DEEPSEEK V4 FLASH 0731
+  // DEEPSEEK V4 FLASH
   // ==========================================================
 
   "deepseek-v4-flash": {
@@ -252,7 +115,7 @@ const MODELS = {
       "deepseek-v4-flash",
 
     upstream:
-      "deepseek-ai/deepseek-v4-flash-0731",
+      "deepseek-ai/deepseek-v4-flash",
 
     owner:
       "deepseek-ai",
@@ -463,6 +326,70 @@ const MODELS = {
 
     owner:
       "google",
+
+    multimodal:
+      true,
+
+    contextWindow:
+      262144,
+
+    maxTokens:
+      16384,
+
+    temperature:
+      1.0,
+
+    top_p:
+      0.95,
+
+    reasoning: {
+
+      type:
+        "chat_template_thinking",
+
+      default:
+        DEFAULT_GEMMA_THINKING
+    },
+
+    supports: {
+
+      top_p:
+        true,
+
+      presence_penalty:
+        false,
+
+      frequency_penalty:
+        false,
+
+      seed:
+        false,
+
+      tools:
+        true,
+
+      stream_options:
+        false,
+
+      stop:
+        false
+    }
+  },
+
+  // ==========================================================
+  // Z.AI 5.3 FLASH
+  // ==========================================================
+
+  "z-ai-glm-5.3-flash": {
+
+    id:
+      "z-ai-glm-5.3-flash",
+
+    upstream:
+      "z-ai/glm-5.3-flash",
+
+    owner:
+      "z-ai",
 
     multimodal:
       true,

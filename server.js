@@ -4,14 +4,6 @@
 //
 // CURRENT MODELS
 //
-// kimi-k3
-//   -> moonshotai/kimi-k3
-//
-// deepseek-v4-pro
-//   -> deepseek-ai/deepseek-v4-pro-0813
-//
-// deepseek-v4-flash
-//   -> deepseek-ai/deepseek-v4-flash-0731
 //
 // muse-glimmer-30b
 //   -> meta/muse-glimmer-30b
@@ -97,7 +89,7 @@ const DEFAULT_GEMMA_THINKING =
 // ============================================================
 
 const FALLBACK_MODEL =
-  "gemma-4-31b";
+  "deepseek-v4-flash";
 
 // ============================================================
 // MODEL DEFINITIONS
@@ -115,7 +107,7 @@ const MODELS = {
       "deepseek-v4-flash",
 
     upstream:
-      "deepseek-ai/deepseek-v4-flash",
+      "deepseek-ai/deepseek-v4.1-flash",
 
     owner:
       "deepseek-ai",

@@ -69,7 +69,6 @@ const DEFAULT_DEEPSEEK_REASONING =
   "high";
 
 const DEFAULT_MUSE_REASONING =
-  process.env.MUSE_REASONING_EFFORT ||
   "high";
 
 const DEFAULT_NEMOTRON_THINKING =
@@ -89,84 +88,13 @@ const DEFAULT_GEMMA_THINKING =
 // ============================================================
 
 const FALLBACK_MODEL =
-  "deepseek-v4-flash";
+  "muse-glimmer-30b";
 
 // ============================================================
 // MODEL DEFINITIONS
 // ============================================================
 
 const MODELS = {
-
-  // ==========================================================
-  // DEEPSEEK V4 FLASH
-  // ==========================================================
-
-  "deepseek-v4-flash": {
-
-    id:
-      "deepseek-v4-flash",
-
-    upstream:
-      "deepseek-ai/deepseek-v4.1-flash",
-
-    owner:
-      "deepseek-ai",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      1000000,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
-
-    reasoning: {
-
-      type:
-        "reasoning_effort",
-
-      allowed: [
-        "low",
-        "high",
-        "max"
-      ],
-
-      default:
-        DEFAULT_DEEPSEEK_REASONING
-    },
-
-    supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        true,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
-    }
-  },
-
   // ==========================================================
   // MUSE GLIMMER 30B
   // ==========================================================

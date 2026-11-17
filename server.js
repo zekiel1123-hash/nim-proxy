@@ -4,30 +4,20 @@
 //
 // CURRENT MODELS
 //
-//
-// muse-glimmer-30b
-//   -> meta/muse-glimmer-30b
-//
-// nemotron-3-ultra
-//   -> nvidia/nemotron-3-ultra-550b-a55b
-//
-// gemma-4-31b
-//   -> google/gemma-4-31b-it
-//
-// COMMUNITY / DEPLOYMENT
-//
-// deepseek-r1-32b-uncensored
-//   -> nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored
-//   -> https://nim.api.nvidia.com/v1
-//
-// llama3.3-8b-heretic
-//   -> DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-Uncensored-Claude-4.5-Opus-High-Reasoning
-//   -> https://nim.api.nvidia.com/v1
+// muse-glimmer-30b       -> meta/muse-glimmer-30b
+// kimi-k3.1-pro          -> moonshotai/kimi-k3.1-pro
+// step-5-preview        -> stepfun-ai/step-5-preview
+// glm-5-3-flash         -> z-ai/glm-5.3-flash
+// gemma-4-31b-it        -> google/gemma-4-31b-it
 //
 // FALLBACK
 //
-// gemma-4-31b
+// muse-glimmer-30b
 //
+// Note: NVIDIA currently marks the Kimi K3.1 Pro hosted endpoint as
+// preview/playground-only and not available for programmatic API access.
+// The model is registered here, but NVIDIA may reject live API requests.
+
 // ============================================================
 
 const express = require("express");
@@ -46,11 +36,6 @@ const NIM_API_BASE =
 const NIM_API_KEY =
   process.env.NIM_API_KEY;
 
-// Community / Deployment NIM endpoint.
-const COMMUNITY_NIM_API_BASE =
-  process.env.COMMUNITY_NIM_API_BASE ||
-  "https://nim.api.nvidia.com/v1";
-
 // ============================================================
 // CONFIGURATION
 // ============================================================
@@ -64,23 +49,17 @@ const DEFAULT_KIMI_REASONING =
   process.env.KIMI_REASONING_EFFORT ||
   "high";
 
-const DEFAULT_DEEPSEEK_REASONING =
-  process.env.DEEPSEEK_REASONING_EFFORT ||
-  "high";
-
 const DEFAULT_MUSE_REASONING =
+  process.env.MUSE_REASONING_EFFORT ||
   "high";
 
-const DEFAULT_NEMOTRON_THINKING =
-  String(
-    process.env.NEMOTRON_ENABLE_THINKING ||
-      "true"
-  ).toLowerCase() === "true";
+const DEFAULT_GLM_REASONING =
+  process.env.GLM_REASONING_EFFORT ||
+  "max";
 
 const DEFAULT_GEMMA_THINKING =
   String(
-    process.env.GEMMA_ENABLE_THINKING ||
-      "true"
+    process.env.GEMMA_ENABLE_THINKING || "true"
   ).toLowerCase() === "true";
 
 // ============================================================
@@ -96,40 +75,28 @@ const FALLBACK_MODEL =
 
 const MODELS = {
   // ==========================================================
-  // MUSE GLIMMER 30B
+  // META - MUSE GLIMMER 30B
   // ==========================================================
 
   "muse-glimmer-30b": {
+    id: "muse-glimmer-30b",
+    upstream: "meta/muse-glimmer-30b",
+    owner: "meta",
 
-    id:
-      "muse-glimmer-30b",
+    modalities: {
+      image: true,
+      video: false
+    },
 
-    upstream:
-      "meta/muse-glimmer-30b",
+    contextWindow: 131072,
+    maxTokens: 131072,
+    defaultMaxTokens: 2048,
 
-    owner:
-      "meta",
-
-    multimodal:
-      true,
-
-    contextWindow:
-      131072,
-
-    maxTokens:
-      131072,
-
-    temperature:
-      0.95,
-
-    top_p:
-      1.0,
+    temperature: 0.95,
+    top_p: 1.0,
 
     reasoning: {
-
-      type:
-        "reasoning_effort",
-
+      type: "reasoning_effort",
       allowed: [
         "none",
         "minimal",
@@ -138,362 +105,192 @@ const MODELS = {
         "high",
         "max"
       ],
-
-      default:
-        DEFAULT_MUSE_REASONING
+      default: DEFAULT_MUSE_REASONING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        true,
-
-      frequency_penalty:
-        true,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        true
+      temperature: true,
+      top_p: true,
+      presence_penalty: true,
+      frequency_penalty: true,
+      seed: true,
+      tools: true,
+      stream_options: false,
+      stop: true,
+      chat_template_kwargs: true
     }
   },
 
   // ==========================================================
-  // NEMOTRON 3 ULTRA
+  // MOONSHOT AI - KIMI K3.1 PRO
   // ==========================================================
 
-  "nemotron-3-ultra": {
+  "kimi-k3.1-pro": {
+    id: "kimi-k3.1-pro",
+    upstream: "moonshotai/kimi-k3.1-pro",
+    owner: "moonshotai",
 
-    id:
-      "nemotron-3-ultra",
-
-    upstream:
-      "nvidia/nemotron-3-ultra-550b-a55b",
-
-    owner:
-      "nvidia",
-
-    multimodal:
-      false,
-
-    contextWindow:
-      1000000,
-
-    maxTokens:
-      32768,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
-
-    reasoning: {
-
-      type:
-        "chat_template_thinking",
-
-      default:
-        DEFAULT_NEMOTRON_THINKING
+    // The published NVIDIA chat endpoint documents image parts but
+    // does not document a video_url message part for this route.
+    modalities: {
+      image: true,
+      video: false
     },
 
+    contextWindow: 1048576,
+    maxTokens: 65536,
+    defaultMaxTokens: 16384,
+
+    temperature: 1.0,
+
+    reasoning: {
+      type: "reasoning_effort",
+      allowed: [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      default: DEFAULT_KIMI_REASONING
+    },
+
+    // The NVIDIA model page currently says this hosted endpoint is
+    // preview/playground-only, not open for programmatic API calls.
+    // Do not silently substitute Muse if NVIDIA rejects a Kimi request.
+    fallbackOnError: false,
+
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        true
+      temperature: true,
+      top_p: false,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: true,
+      tools: true,
+      stream_options: true,
+      stop: false,
+      chat_template_kwargs: false
     }
   },
 
   // ==========================================================
-  // GEMMA 4 31B IT
+  // STEPFUN AI - STEP 5 PREVIEW
   // ==========================================================
 
-  "gemma-4-31b": {
+  "step-5-preview": {
+    id: "step-5-preview",
+    upstream: "stepfun-ai/step-5-preview",
+    owner: "stepfun-ai",
 
-    id:
-      "gemma-4-31b",
+    modalities: {
+      image: true,
+      video: false
+    },
 
-    upstream:
-      "google/gemma-4-31b-it",
+    contextWindow: 1048576,
+    maxTokens: 1048576,
+    defaultMaxTokens: 4096,
 
-    owner:
-      "google",
+    temperature: 0.5,
+    top_p: 1.0,
 
-    multimodal:
-      true,
-
-    contextWindow:
-      262144,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
-
+    // Step 5 Preview reasoning is enabled by the checkpoint.
+    // NVIDIA specifically says not to set enable_thinking=false.
     reasoning: {
-
-      type:
-        "chat_template_thinking",
-
-      default:
-        DEFAULT_GEMMA_THINKING
+      type: "always_on"
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      temperature: true,
+      top_p: true,
+      presence_penalty: true,
+      frequency_penalty: true,
+      seed: true,
+      tools: true,
+      stream_options: false,
+      stop: true,
+      chat_template_kwargs: true
     }
   },
 
   // ==========================================================
-  // Z.AI 5.3 FLASH
+  // Z.AI - GLM 5.3 FLASH
   // ==========================================================
 
-  "z-ai-glm-5.3-flash": {
+  "glm-5-3-flash": {
+    id: "glm-5-3-flash",
+    upstream: "z-ai/glm-5.3-flash",
+    owner: "z-ai",
 
-    id:
-      "z-ai-glm-5.3-flash",
+    modalities: {
+      image: true,
+      video: false
+    },
 
-    upstream:
-      "z-ai/glm-5.3-flash",
+    contextWindow: 1048576,
+    defaultMaxTokens: 1024,
 
-    owner:
-      "z-ai",
-
-    multimodal:
-      true,
-
-    contextWindow:
-      262144,
-
-    maxTokens:
-      16384,
-
-    temperature:
-      1.0,
-
-    top_p:
-      0.95,
+    temperature: 0.5,
+    top_p: 1.0,
 
     reasoning: {
-
-      type:
-        "chat_template_thinking",
-
-      default:
-        DEFAULT_GEMMA_THINKING
+      type: "reasoning_effort",
+      allowed: [
+        "low",
+        "high",
+        "max"
+      ],
+      default: DEFAULT_GLM_REASONING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        true,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      temperature: true,
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: false,
+      tools: true,
+      stream_options: false,
+      stop: false,
+      chat_template_kwargs: true
     }
   },
 
   // ==========================================================
-  // COMMUNITY / DEPLOYMENT
-  // DEEPSEEK-R1-DISTILL-QWEN-32B-UNCENSORED
+  // GOOGLE - GEMMA 4 31B IT
   // ==========================================================
 
-  "deepseek-r1-32b-uncensored": {
+  "gemma-4-31b-it": {
+    id: "gemma-4-31b-it",
+    upstream: "google/gemma-4-31b-it",
+    owner: "google",
 
-    id:
-      "deepseek-r1-32b-uncensored",
+    modalities: {
+      image: true,
+      video: false
+    },
 
-    upstream:
-      "nicoboss/DeepSeek-R1-Distill-Qwen-32B-Uncensored",
+    contextWindow: 262144,
+    maxTokens: 32768,
+    defaultMaxTokens: 4096,
 
-    owner:
-      "nicoboss",
-
-    apiBase:
-      COMMUNITY_NIM_API_BASE,
-
-    multimodal:
-      false,
-
-    contextWindow:
-      131072,
-
-    maxTokens:
-      32768,
-
-    defaultMaxTokens:
-      1024,
-
-    temperature:
-      0.5,
-
-    top_p:
-      1.0,
+    temperature: 1.0,
+    top_p: 0.95,
 
     reasoning: {
-
-      type:
-        "none"
+      type: "chat_template_thinking",
+      default: DEFAULT_GEMMA_THINKING
     },
 
     supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        false,
-
-      stream_options:
-        false,
-
-      stop:
-        false
-    }
-  },
-
-  // ==========================================================
-  // COMMUNITY / DEPLOYMENT
-  // DAVIDAU LLAMA 3.3 8B
-  // THINKING / HERETIC / UNCENSORED
-  // ==========================================================
-
-  "llama3.3-8b-heretic": {
-
-    id:
-      "llama3.3-8b-heretic",
-
-    upstream:
-      "DavidAU/Llama3.3-8B-Instruct-Thinking-Heretic-Uncensored-Claude-4.5-Opus-High-Reasoning",
-
-    owner:
-      "DavidAU",
-
-    apiBase:
-      COMMUNITY_NIM_API_BASE,
-
-    multimodal:
-      false,
-
-    contextWindow:
-      131072,
-
-    maxTokens:
-      32768,
-
-    defaultMaxTokens:
-      1024,
-
-    temperature:
-      0.5,
-
-    top_p:
-      1.0,
-
-    reasoning: {
-
-      type:
-        "none"
-    },
-
-    supports: {
-
-      top_p:
-        true,
-
-      presence_penalty:
-        false,
-
-      frequency_penalty:
-        false,
-
-      seed:
-        false,
-
-      tools:
-        false,
-
-      stream_options:
-        false,
-
-      stop:
-        false
+      temperature: true,
+      top_p: true,
+      presence_penalty: false,
+      frequency_penalty: false,
+      seed: false,
+      tools: true,
+      stream_options: false,
+      stop: false,
+      chat_template_kwargs: true
     }
   }
 };
@@ -508,37 +305,53 @@ app.use(
 
 app.use(
   express.json({
-    limit:
-      "100mb"
+    limit: "100mb"
   })
 );
 
 app.use(
   express.urlencoded({
-    limit:
-      "100mb",
-
-    extended:
-      true
+    limit: "100mb",
+    extended: true
   })
 );
+
+// ============================================================
+// MODEL ALIASES
+// ============================================================
+
+const MODEL_ALIASES = {
+  "gemma-4-31b": "gemma-4-31b-it",
+  "gemma-4-31b-it": "gemma-4-31b-it",
+
+  "z-ai-glm-5.3-flash": "glm-5-3-flash",
+  "z-ai/glm-5.3-flash": "glm-5-3-flash",
+
+  "stepfun-ai/step-5-preview": "step-5-preview",
+
+  "moonshotai/kimi-k3.1-pro": "kimi-k3.1-pro",
+
+  "meta/muse-glimmer-30b": "muse-glimmer-30b"
+};
 
 // ============================================================
 // HELPERS
 // ============================================================
 
-function getModel(
-  modelName
-) {
+function getModel(modelName) {
+  if (!modelName) {
+    return null;
+  }
 
-  if (
-    modelName &&
-    MODELS[modelName]
-  ) {
+  if (MODELS[modelName]) {
+    return MODELS[modelName];
+  }
 
-    return MODELS[
-      modelName
-    ];
+  const alias =
+    MODEL_ALIASES[modelName];
+
+  if (alias && MODELS[alias]) {
+    return MODELS[alias];
   }
 
   return null;
@@ -548,65 +361,37 @@ function getModel(
 // ERROR MESSAGE EXTRACTION
 // ============================================================
 
-function extractErrorMessage(
-  errorData
-) {
-
-  if (
-    !errorData
-  ) {
-
+function extractErrorMessage(errorData) {
+  if (!errorData) {
     return "Unknown NVIDIA API error";
   }
 
-  if (
-    typeof errorData ===
-    "string"
-  ) {
-
+  if (typeof errorData === "string") {
     return errorData ||
       "Unknown NVIDIA API error";
   }
 
-  if (
-    errorData.error
-  ) {
-
-    if (
-      typeof errorData.error ===
-      "string"
-    ) {
-
+  if (errorData.error) {
+    if (typeof errorData.error === "string") {
       return errorData.error;
     }
 
-    if (
-      errorData.error.message
-    ) {
-
+    if (errorData.error.message) {
       return String(
         errorData.error.message
       );
     }
   }
 
-  if (
-    errorData.message
-  ) {
-
+  if (errorData.message) {
     return String(
       errorData.message
     );
   }
 
   try {
-
-    return JSON.stringify(
-      errorData
-    );
-
+    return JSON.stringify(errorData);
   } catch {
-
     return "Unknown NVIDIA API error";
   }
 }
@@ -621,20 +406,11 @@ function sendOpenAIError(
   message,
   type = "proxy_error"
 ) {
-
-  if (
-    res.headersSent
-  ) {
-
+  if (res.headersSent) {
     try {
-
-      if (
-        !res.writableEnded
-      ) {
-
+      if (!res.writableEnded) {
         res.end();
       }
-
     } catch {
       // Ignore.
     }
@@ -645,20 +421,16 @@ function sendOpenAIError(
   return res
     .status(status)
     .json({
-
       error: {
-
         message:
           message ||
           "Proxy error",
 
         type,
 
-        param:
-          null,
+        param: null,
 
-        code:
-          null
+        code: null
       }
     });
 }
@@ -667,74 +439,58 @@ function sendOpenAIError(
 // THINK TAG CLEANUP
 // ============================================================
 
-function stripThinkTags(
-  text
-) {
-
-  if (
-    typeof text !==
-    "string"
-  ) {
-
+function stripThinkTags(text) {
+  if (typeof text !== "string") {
     return text;
   }
 
   return text
-
     .replace(
       /<think>[\s\S]*?<\/think>/gi,
       ""
     )
-
     .replace(
       /<\/?think>/gi,
-      "");
+      ""
+    );
 }
 
 // ============================================================
 // MEDIA DETECTION
 // ============================================================
 
-function containsMedia(
-  messages
-) {
-
-  if (
-    !Array.isArray(
-      messages
-    )
-  ) {
-
+function containsImage(messages) {
+  if (!Array.isArray(messages)) {
     return false;
   }
 
-  for (
-    const message of
-    messages
-  ) {
-
-    if (
-      !Array.isArray(
-        message?.content
-      )
-    ) {
-
+  for (const message of messages) {
+    if (!Array.isArray(message?.content)) {
       continue;
     }
 
-    for (
-      const part of
-      message.content
-    ) {
+    for (const part of message.content) {
+      if (part?.type === "image_url") {
+        return true;
+      }
+    }
+  }
 
-      if (
-        part?.type ===
-          "image_url" ||
+  return false;
+}
 
-        part?.type ===
-          "video_url"
-      ) {
+function containsVideo(messages) {
+  if (!Array.isArray(messages)) {
+    return false;
+  }
 
+  for (const message of messages) {
+    if (!Array.isArray(message?.content)) {
+      continue;
+    }
+
+    for (const part of message.content) {
+      if (part?.type === "video_url") {
         return true;
       }
     }
@@ -747,29 +503,13 @@ function containsMedia(
 // MESSAGE VALIDATION
 // ============================================================
 
-function validateMessages(
-  messages
-) {
-
-  if (
-    !Array.isArray(
-      messages
-    )
-  ) {
-
-    return (
-      "messages must be an array"
-    );
+function validateMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return "messages must be an array";
   }
 
-  if (
-    messages.length ===
-    0
-  ) {
-
-    return (
-      "messages cannot be empty"
-    );
+  if (messages.length === 0) {
+    return "messages cannot be empty";
   }
 
   for (
@@ -777,39 +517,27 @@ function validateMessages(
     i < messages.length;
     i++
   ) {
-
-    const message =
-      messages[i];
+    const message = messages[i];
 
     if (
       !message ||
-      typeof message !==
-        "object"
+      typeof message !== "object"
     ) {
-
       return (
         `messages[${i}] must be an object`
       );
     }
 
-    if (
-      typeof message.role !==
-      "string"
-    ) {
-
+    if (typeof message.role !== "string") {
       return (
         `messages[${i}].role must be a string`
       );
     }
 
     if (
-      message.content ===
-        undefined &&
-
-      message.tool_calls ===
-        undefined
+      message.content === undefined &&
+      message.tool_calls === undefined
     ) {
-
       return (
         `messages[${i}] must contain content or tool_calls`
       );
@@ -827,12 +555,9 @@ function getReasoningEffort(
   requestBody,
   model
 ) {
-
   if (
-    model.reasoning.type !==
-    "reasoning_effort"
+    model.reasoning.type !== "reasoning_effort"
   ) {
-
     return null;
   }
 
@@ -845,7 +570,6 @@ function getReasoningEffort(
       requested
     )
   ) {
-
     return requested;
   }
 
@@ -865,150 +589,35 @@ function buildNvidiaRequest(
   body,
   model
 ) {
-
-  // ==========================================================
-  // DAVIDAU COMMUNITY MODEL
-  // ==========================================================
-  //
-  // EXACTLY MATCHES THE USER'S WORKING OPENAI SDK REQUEST:
-  //
-  // model
-  // messages
-  // temperature: 0.5
-  // top_p: 1
-  // max_tokens: 1024
-  // stream: true
-  //
-  // No reasoning_effort.
-  // No chat_template_kwargs.
-  // No tools.
-  // No stop.
-  // No stream_options.
-  //
-  // ==========================================================
-
-  if (
-    model.id ===
-    "llama3.3-8b-heretic"
-  ) {
-
-    return {
-
-      model:
-        model.upstream,
-
-      messages:
-        body.messages,
-
-      temperature:
-        0.5,
-
-      top_p:
-        1,
-
-      max_tokens:
-        1024,
-
-      stream:
-        true
-    };
-  }
-
-  // ==========================================================
-  // DEEPSEEK R1 COMMUNITY MODEL
-  // ==========================================================
-
-  if (
-    model.id ===
-    "deepseek-r1-32b-uncensored"
-  ) {
-
-    return {
-
-      model:
-        model.upstream,
-
-      messages:
-        body.messages,
-
-      temperature:
-        body.temperature !==
-        undefined
-          ? body.temperature
-          : 0.5,
-
-      top_p:
-        body.top_p !==
-        undefined
-          ? body.top_p
-          : 1,
-
-      max_tokens:
-        body.max_tokens !==
-        undefined
-          ? body.max_tokens
-          : 1024,
-
-      stream:
-        true
-    };
-  }
-
-  // ==========================================================
-  // STANDARD NVIDIA MODELS
-  // ==========================================================
-
   const request = {
-
-    model:
-      model.upstream,
-
-    messages:
-      body.messages,
-
-    stream:
-      true
+    model: model.upstream,
+    messages: body.messages,
+    stream: true
   };
 
   // ==========================================================
   // TEMPERATURE
   // ==========================================================
 
-  if (
-    body.temperature !==
-    undefined
-  ) {
-
-    request.temperature =
-      body.temperature;
-
-  } else {
-
-    request.temperature =
-      model.temperature;
+  if (model.supports.temperature) {
+    if (body.temperature !== undefined) {
+      request.temperature =
+        body.temperature;
+    } else if (model.temperature !== undefined) {
+      request.temperature =
+        model.temperature;
+    }
   }
 
   // ==========================================================
   // TOP P
   // ==========================================================
 
-  if (
-    model.supports.top_p
-  ) {
-
-    if (
-      body.top_p !==
-      undefined
-    ) {
-
+  if (model.supports.top_p) {
+    if (body.top_p !== undefined) {
       request.top_p =
         body.top_p;
-
-    } else if (
-      model.top_p !==
-      undefined
-    ) {
-
+    } else if (model.top_p !== undefined) {
       request.top_p =
         model.top_p;
     }
@@ -1021,51 +630,42 @@ function buildNvidiaRequest(
   let requestedMaxTokens =
     body.max_tokens;
 
-  if (
-    requestedMaxTokens ===
-    undefined
-  ) {
-
+  if (requestedMaxTokens === undefined) {
     requestedMaxTokens =
       body.max_completion_tokens;
   }
 
-  if (
-    requestedMaxTokens ===
-    undefined
-  ) {
-
+  if (requestedMaxTokens === undefined) {
     requestedMaxTokens =
+      model.defaultMaxTokens ||
       model.maxTokens;
   }
 
   if (
     model.maxTokens &&
-    requestedMaxTokens >
-      model.maxTokens
+    requestedMaxTokens > model.maxTokens
   ) {
-
     requestedMaxTokens =
       model.maxTokens;
   }
 
-  request.max_tokens =
-    requestedMaxTokens;
+  if (
+    requestedMaxTokens !== undefined &&
+    requestedMaxTokens !== null
+  ) {
+    request.max_tokens =
+      requestedMaxTokens;
+  }
 
   // ==========================================================
   // REASONING EFFORT
   // ==========================================================
 
   if (
-    model.reasoning.type ===
-    "reasoning_effort"
+    model.reasoning.type === "reasoning_effort"
   ) {
-
     request.reasoning_effort =
-      getReasoningEffort(
-        body,
-        model
-      );
+      getReasoningEffort(body, model);
   }
 
   // ==========================================================
@@ -1073,17 +673,45 @@ function buildNvidiaRequest(
   // ==========================================================
 
   if (
-    model.reasoning.type ===
-    "chat_template_thinking"
+    model.reasoning.type === "chat_template_thinking"
   ) {
-
     request.chat_template_kwargs = {
-
       enable_thinking:
-        model.id ===
-          "nemotron-3-ultra"
-          ? DEFAULT_NEMOTRON_THINKING
-          : DEFAULT_GEMMA_THINKING
+        model.reasoning.default
+    };
+  }
+
+  // ==========================================================
+  // STEP 5 REASONING
+  // ==========================================================
+
+  // Step 5 Preview has always-on reasoning.
+  // Do not send enable_thinking=false.
+
+  if (
+    model.reasoning.type === "always_on" &&
+    model.supports.chat_template_kwargs
+  ) {
+    if (body.chat_template_kwargs !== undefined) {
+      request.chat_template_kwargs = {
+        ...body.chat_template_kwargs,
+        enable_thinking: true
+      };
+    }
+  }
+
+  // ==========================================================
+  // CUSTOM CHAT TEMPLATE PARAMETERS
+  // ==========================================================
+
+  if (
+    model.supports.chat_template_kwargs &&
+    body.chat_template_kwargs &&
+    model.reasoning.type !== "always_on" &&
+    model.reasoning.type !== "chat_template_thinking"
+  ) {
+    request.chat_template_kwargs = {
+      ...body.chat_template_kwargs
     };
   }
 
@@ -1093,10 +721,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.seed &&
-    body.seed !==
-      undefined
+    body.seed !== undefined
   ) {
-
     request.seed =
       body.seed;
   }
@@ -1107,13 +733,9 @@ function buildNvidiaRequest(
 
   if (
     model.supports.tools &&
-    Array.isArray(
-      body.tools
-    ) &&
-    body.tools.length >
-      0
+    Array.isArray(body.tools) &&
+    body.tools.length > 0
   ) {
-
     request.tools =
       body.tools;
   }
@@ -1124,10 +746,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.tools &&
-    body.tool_choice !==
-      undefined
+    body.tool_choice !== undefined
   ) {
-
     request.tool_choice =
       body.tool_choice;
   }
@@ -1138,10 +758,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.stop &&
-    body.stop !==
-      undefined
+    body.stop !== undefined
   ) {
-
     request.stop =
       body.stop;
   }
@@ -1152,10 +770,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.presence_penalty &&
-    body.presence_penalty !==
-      undefined
+    body.presence_penalty !== undefined
   ) {
-
     request.presence_penalty =
       body.presence_penalty;
   }
@@ -1166,10 +782,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.frequency_penalty &&
-    body.frequency_penalty !==
-      undefined
+    body.frequency_penalty !== undefined
   ) {
-
     request.frequency_penalty =
       body.frequency_penalty;
   }
@@ -1180,10 +794,8 @@ function buildNvidiaRequest(
 
   if (
     model.supports.stream_options &&
-    body.stream_options !==
-      undefined
+    body.stream_options !== undefined
   ) {
-
     request.stream_options =
       body.stream_options;
   }
@@ -1198,34 +810,19 @@ function buildNvidiaRequest(
 app.get(
   "/v1/models",
   (req, res) => {
-
     const models =
-      Object.values(
-        MODELS
-      ).map(
+      Object.values(MODELS).map(
         model => ({
-
-          id:
-            model.id,
-
-          object:
-            "model",
-
-          created:
-            0,
-
-          owned_by:
-            model.owner
+          id: model.id,
+          object: "model",
+          created: 0,
+          owned_by: model.owner
         })
       );
 
     res.json({
-
-      object:
-        "list",
-
-      data:
-        models
+      object: "list",
+      data: models
     });
   }
 );
@@ -1237,25 +834,12 @@ app.get(
 app.get(
   "/",
   (req, res) => {
-
     res.json({
-
-      object:
-        "proxy",
-
-      status:
-        "ok",
-
-      streaming:
-        true,
-
-      fallback_model:
-        FALLBACK_MODEL,
-
-      models:
-        Object.keys(
-          MODELS
-        )
+      object: "proxy",
+      status: "ok",
+      streaming: true,
+      fallback_model: FALLBACK_MODEL,
+      models: Object.keys(MODELS)
     });
   }
 );
@@ -1270,7 +854,6 @@ app.post(
     req,
     res
   ) => {
-
     const body =
       req.body || {};
 
@@ -1278,17 +861,11 @@ app.post(
     // STREAMING ONLY
     // ========================================================
 
-    if (
-      body.stream !==
-      true
-    ) {
-
+    if (body.stream !== true) {
       return sendOpenAIError(
         res,
         400,
-
         "This proxy supports streaming chat completions only. Set stream=true.",
-
         "stream_required"
       );
     }
@@ -1298,20 +875,13 @@ app.post(
     // ========================================================
 
     const validationError =
-      validateMessages(
-        body.messages
-      );
+      validateMessages(body.messages);
 
-    if (
-      validationError
-    ) {
-
+    if (validationError) {
       return sendOpenAIError(
         res,
         400,
-
         validationError,
-
         "invalid_messages"
       );
     }
@@ -1324,27 +894,20 @@ app.post(
       body.model;
 
     let selectedModel =
-      getModel(
-        requestedModel
-      );
+      getModel(requestedModel);
 
     // ========================================================
     // UNKNOWN MODEL -> FALLBACK
     // ========================================================
 
-    if (
-      !selectedModel
-    ) {
-
+    if (!selectedModel) {
       console.warn(
         `[Fallback] Unknown model "${requestedModel}". ` +
         `Using "${FALLBACK_MODEL}".`
       );
 
       selectedModel =
-        MODELS[
-          FALLBACK_MODEL
-        ];
+        MODELS[FALLBACK_MODEL];
     }
 
     // ========================================================
@@ -1352,18 +915,25 @@ app.post(
     // ========================================================
 
     if (
-      containsMedia(
-        body.messages
-      ) &&
-      !selectedModel.multimodal
+      containsImage(body.messages) &&
+      !selectedModel.modalities.image
     ) {
-
       return sendOpenAIError(
         res,
         400,
+        `"${selectedModel.id}" does not support image input.`,
+        "multimodal_not_supported"
+      );
+    }
 
-        `"${selectedModel.id}" does not support image/video input.`,
-
+    if (
+      containsVideo(body.messages) &&
+      !selectedModel.modalities.video
+    ) {
+      return sendOpenAIError(
+        res,
+        400,
+        `"${selectedModel.id}" does not support video input.`,
         "multimodal_not_supported"
       );
     }
@@ -1385,15 +955,14 @@ app.post(
     );
 
     console.log(
-      `[Endpoint] ` +
-      `${selectedModel.apiBase || NIM_API_BASE}`
+      `[Endpoint] ${NIM_API_BASE}`
     );
 
     console.log(
       `[Request Config] ` +
-      `temperature=${primaryRequest.temperature} ` +
-      `top_p=${primaryRequest.top_p ?? "default"} ` +
-      `max_tokens=${primaryRequest.max_tokens} ` +
+      `temperature=${primaryRequest.temperature ?? "default"} ` +
+      `top_p=${primaryRequest.top_p ?? "not_sent"} ` +
+      `max_tokens=${primaryRequest.max_tokens ?? "default"} ` +
       `reasoning_effort=${primaryRequest.reasoning_effort ?? "not_sent"}`
     );
 
@@ -1404,18 +973,12 @@ app.post(
     let upstreamResponse;
 
     try {
-
       upstreamResponse =
         await axios.post(
-
-          `${selectedModel.apiBase || NIM_API_BASE}/chat/completions`,
-
+          `${NIM_API_BASE}/chat/completions`,
           primaryRequest,
-
           {
-
             headers: {
-
               Authorization:
                 `Bearer ${NIM_API_KEY}`,
 
@@ -1426,21 +989,15 @@ app.post(
                 "text/event-stream"
             },
 
-            responseType:
-              "stream",
+            responseType: "stream",
 
-            timeout:
-              0,
+            timeout: 0,
 
-            validateStatus:
-              () => true
+            validateStatus: () => true
           }
         );
 
-    } catch (
-      error
-    ) {
-
+    } catch (error) {
       console.error(
         "[NVIDIA Connection Error]",
         error.message
@@ -1451,46 +1008,33 @@ app.post(
       // ======================================================
 
       if (
-        selectedModel.id !==
-        FALLBACK_MODEL
+        selectedModel.id !== FALLBACK_MODEL &&
+        selectedModel.fallbackOnError !== false
       ) {
-
         console.warn(
           `[Fallback] ${selectedModel.id} connection failed. ` +
           `Retrying with ${FALLBACK_MODEL}.`
         );
 
         try {
-
           const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+            MODELS[FALLBACK_MODEL];
 
           const fallbackRequest =
             buildNvidiaRequest(
-
               {
                 ...body,
-
-                model:
-                  FALLBACK_MODEL
+                model: FALLBACK_MODEL
               },
-
               fallbackModel
             );
 
           upstreamResponse =
             await axios.post(
-
-              `${fallbackModel.apiBase || NIM_API_BASE}/chat/completions`,
-
+              `${NIM_API_BASE}/chat/completions`,
               fallbackRequest,
-
               {
-
                 headers: {
-
                   Authorization:
                     `Bearer ${NIM_API_KEY}`,
 
@@ -1501,24 +1045,18 @@ app.post(
                     "text/event-stream"
                 },
 
-                responseType:
-                  "stream",
+                responseType: "stream",
 
-                timeout:
-                  0,
+                timeout: 0,
 
-                validateStatus:
-                  () => true
+                validateStatus: () => true
               }
             );
 
           selectedModel =
             fallbackModel;
 
-        } catch (
-          fallbackError
-        ) {
-
+        } catch (fallbackError) {
           console.error(
             "[Fallback Connection Error]",
             fallbackError.message
@@ -1527,21 +1065,16 @@ app.post(
           return sendOpenAIError(
             res,
             502,
-
             fallbackError.message,
-
             "nvidia_fallback_error"
           );
         }
 
       } else {
-
         return sendOpenAIError(
           res,
           502,
-
           error.message,
-
           "nvidia_connection_error"
         );
       }
@@ -1565,36 +1098,22 @@ app.post(
     // ========================================================
 
     if (
-      upstreamResponse.status <
-        200 ||
-      upstreamResponse.status >=
-        300
+      upstreamResponse.status < 200 ||
+      upstreamResponse.status >= 300
     ) {
-
-      let errorText =
-        "";
+      let errorText = "";
 
       try {
-
         for await (
-          const chunk of
-          upstreamResponse.data
+          const chunk of upstreamResponse.data
         ) {
-
           errorText +=
-            chunk.toString(
-              "utf8"
-            );
+            chunk.toString("utf8");
 
-          if (
-            errorText.length >
-            100000
-          ) {
-
+          if (errorText.length > 100000) {
             break;
           }
         }
-
       } catch {
         // Ignore stream-read failure.
       }
@@ -1603,20 +1122,14 @@ app.post(
         errorText;
 
       try {
-
         parsedError =
-          JSON.parse(
-            errorText
-          );
-
+          JSON.parse(errorText);
       } catch {
         // Keep string.
       }
 
       const upstreamMessage =
-        extractErrorMessage(
-          parsedError
-        );
+        extractErrorMessage(parsedError);
 
       console.error(
         `[NVIDIA HTTP ${upstreamResponse.status}] ` +
@@ -1629,10 +1142,9 @@ app.post(
       // ======================================================
 
       if (
-        selectedModel.id !==
-        FALLBACK_MODEL
+        selectedModel.id !== FALLBACK_MODEL &&
+        selectedModel.fallbackOnError !== false
       ) {
-
         console.warn(
           `[Fallback] ${selectedModel.id} returned HTTP ` +
           `${upstreamResponse.status}. ` +
@@ -1640,36 +1152,24 @@ app.post(
         );
 
         try {
-
           const fallbackModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+            MODELS[FALLBACK_MODEL];
 
           const fallbackRequest =
             buildNvidiaRequest(
-
               {
                 ...body,
-
-                model:
-                  FALLBACK_MODEL
+                model: FALLBACK_MODEL
               },
-
               fallbackModel
             );
 
           const fallbackResponse =
             await axios.post(
-
-              `${fallbackModel.apiBase || NIM_API_BASE}/chat/completions`,
-
+              `${NIM_API_BASE}/chat/completions`,
               fallbackRequest,
-
               {
-
                 headers: {
-
                   Authorization:
                     `Bearer ${NIM_API_KEY}`,
 
@@ -1680,48 +1180,31 @@ app.post(
                     "text/event-stream"
                 },
 
-                responseType:
-                  "stream",
+                responseType: "stream",
 
-                timeout:
-                  0,
+                timeout: 0,
 
-                validateStatus:
-                  () => true
+                validateStatus: () => true
               }
             );
 
           if (
-            fallbackResponse.status <
-              200 ||
-            fallbackResponse.status >=
-              300
+            fallbackResponse.status < 200 ||
+            fallbackResponse.status >= 300
           ) {
-
-            let fallbackText =
-              "";
+            let fallbackText = "";
 
             try {
-
               for await (
-                const chunk of
-                fallbackResponse.data
+                const chunk of fallbackResponse.data
               ) {
-
                 fallbackText +=
-                  chunk.toString(
-                    "utf8"
-                  );
+                  chunk.toString("utf8");
 
-                if (
-                  fallbackText.length >
-                  100000
-                ) {
-
+                if (fallbackText.length > 100000) {
                   break;
                 }
               }
-
             } catch {
               // Ignore.
             }
@@ -1730,20 +1213,14 @@ app.post(
               fallbackText;
 
             try {
-
               fallbackParsed =
-                JSON.parse(
-                  fallbackText
-                );
-
+                JSON.parse(fallbackText);
             } catch {
               // Keep string.
             }
 
             const fallbackMessage =
-              extractErrorMessage(
-                fallbackParsed
-              );
+              extractErrorMessage(fallbackParsed);
 
             console.error(
               `[Fallback HTTP ${fallbackResponse.status}] ` +
@@ -1753,9 +1230,7 @@ app.post(
             return sendOpenAIError(
               res,
               fallbackResponse.status,
-
               fallbackMessage,
-
               "nvidia_fallback_error"
             );
           }
@@ -1764,19 +1239,14 @@ app.post(
             fallbackResponse;
 
           selectedModel =
-            MODELS[
-              FALLBACK_MODEL
-            ];
+            fallbackModel;
 
           console.log(
             `[Fallback] Now streaming from ` +
             `${selectedModel.upstream}`
           );
 
-        } catch (
-          fallbackError
-        ) {
-
+        } catch (fallbackError) {
           console.error(
             "[Fallback Error]",
             fallbackError.message
@@ -1785,279 +1255,26 @@ app.post(
           return sendOpenAIError(
             res,
             502,
-
             fallbackError.message,
-
             "nvidia_fallback_error"
           );
         }
 
       } else {
-
         return sendOpenAIError(
           res,
-
           upstreamResponse.status,
-
           upstreamMessage,
-
           "nvidia_api_error"
         );
       }
     }
 
     // ========================================================
-    // DAVIDAU COMMUNITY MODEL - RAW SSE PASSTHROUGH
-    // ========================================================
-    //
-    // IMPORTANT:
-    //
-    // The supplied working OpenAI SDK example for the DavidAU
-    // model receives the NVIDIA Community stream directly.
-    //
-    // Therefore this model bypasses the generic SSE parser.
-    //
-    // We do NOT:
-    //
-    // - parse JSON chunks
-    // - reconstruct SSE
-    // - strip <think> tags
-    // - alter delta.content
-    // - alter reasoning_content
-    // - add fields
-    // - remove fields
-    //
-    // The exact bytes received from NVIDIA are forwarded to
-    // the downstream client.
-    //
-    // ========================================================
-
-    if (
-      selectedModel.id ===
-      "llama3.3-8b-heretic"
-    ) {
-
-      console.log(
-        "[DavidAU] Using RAW SSE passthrough"
-      );
-
-      console.log(
-        "[DavidAU] Upstream request:",
-        JSON.stringify(
-          primaryRequest,
-          null,
-          2
-        )
-      );
-
-      console.log(
-        "[DavidAU] Upstream HTTP status:",
-        upstreamResponse.status
-      );
-
-      console.log(
-        "[DavidAU] Upstream content-type:",
-        upstreamResponse.headers?.[
-          "content-type"
-        ]
-      );
-
-      // ======================================================
-      // CLIENT SSE HEADERS
-      // ======================================================
-
-      res.status(
-        200
-      );
-
-      res.setHeader(
-        "Content-Type",
-        "text/event-stream; charset=utf-8"
-      );
-
-      res.setHeader(
-        "Cache-Control",
-        "no-cache, no-transform"
-      );
-
-      res.setHeader(
-        "Connection",
-        "keep-alive"
-      );
-
-      res.setHeader(
-        "X-Accel-Buffering",
-        "no"
-      );
-
-      if (
-        typeof res.flushHeaders ===
-        "function"
-      ) {
-
-        res.flushHeaders();
-      }
-
-      // ======================================================
-      // RAW STREAM STATE
-      // ======================================================
-
-      let rawBytes =
-        0;
-
-      let rawChunks =
-        0;
-
-      let rawEnded =
-        false;
-
-      // ======================================================
-      // RAW UPSTREAM DATA
-      // ======================================================
-
-      upstreamResponse.data.on(
-        "data",
-        chunk => {
-
-          if (
-            rawEnded ||
-            res.writableEnded
-          ) {
-
-            return;
-          }
-
-          rawChunks++;
-
-          rawBytes +=
-            chunk.length;
-
-          console.log(
-            `[DavidAU RAW CHUNK] ${chunk.length} bytes`
-          );
-
-          console.log(
-            "[DavidAU RAW DATA]",
-            chunk.toString(
-              "utf8"
-            )
-          );
-
-          try {
-
-            res.write(
-              chunk
-            );
-
-          } catch (
-            error
-          ) {
-
-            console.error(
-              "[DavidAU Response Write Error]",
-              error.message
-            );
-          }
-        }
-      );
-
-      // ======================================================
-      // RAW STREAM END
-      // ======================================================
-
-      upstreamResponse.data.on(
-        "end",
-        () => {
-
-          if (
-            rawEnded
-          ) {
-
-            return;
-          }
-
-          rawEnded =
-            true;
-
-          console.log(
-            `[DavidAU STREAM END] chunks=${rawChunks} bytes=${rawBytes}`
-          );
-
-          if (
-            !res.writableEnded
-          ) {
-
-            res.end();
-          }
-        }
-      );
-
-      // ======================================================
-      // RAW STREAM ERROR
-      // ======================================================
-
-      upstreamResponse.data.on(
-        "error",
-        error => {
-
-          console.error(
-            "[DavidAU RAW STREAM ERROR]",
-            error.message
-          );
-
-          rawEnded =
-            true;
-
-          if (
-            !res.writableEnded
-          ) {
-
-            res.end();
-          }
-        }
-      );
-
-      // ======================================================
-      // CLIENT DISCONNECT
-      // ======================================================
-
-      req.on(
-        "close",
-        () => {
-
-          if (
-            rawEnded
-          ) {
-
-            return;
-          }
-
-          console.log(
-            "[DavidAU] Client connection closed"
-          );
-
-          rawEnded =
-            true;
-
-          if (
-            upstreamResponse?.data?.destroy
-          ) {
-
-            upstreamResponse.data.destroy();
-          }
-        }
-      );
-
-      return;
-    }
-
-    // ========================================================
     // SSE RESPONSE HEADERS
     // ========================================================
 
-    res.status(
-      200
-    );
+    res.status(200);
 
     res.setHeader(
       "Content-Type",
@@ -2079,11 +1296,7 @@ app.post(
       "no"
     );
 
-    if (
-      typeof res.flushHeaders ===
-      "function"
-    ) {
-
+    if (typeof res.flushHeaders === "function") {
       res.flushHeaders();
     }
 
@@ -2091,38 +1304,27 @@ app.post(
     // STREAM STATE
     // ========================================================
 
-    let buffer =
-      "";
+    let buffer = "";
 
-    let finished =
-      false;
+    let finished = false;
 
     // ========================================================
     // WRITE SSE
     // ========================================================
 
-    function writeSSE(
-      data
-    ) {
-
+    function writeSSE(data) {
       if (
         finished ||
         res.writableEnded
       ) {
-
         return;
       }
 
       try {
-
         res.write(
           `data: ${JSON.stringify(data)}\n\n`
         );
-
-      } catch (
-        error
-      ) {
-
+      } catch (error) {
         console.error(
           "[SSE Write Error]",
           error.message
@@ -2135,36 +1337,23 @@ app.post(
     // ========================================================
 
     function finishStream() {
-
-      if (
-        finished
-      ) {
-
+      if (finished) {
         return;
       }
 
-      finished =
-        true;
+      finished = true;
 
       try {
-
-        if (
-          !res.writableEnded
-        ) {
-
+        if (!res.writableEnded) {
           res.write(
             "data: [DONE]\n\n"
           );
         }
-
       } catch {
         // Client may already be gone.
       }
 
-      if (
-        !res.writableEnded
-      ) {
-
+      if (!res.writableEnded) {
         res.end();
       }
     }
@@ -2173,36 +1362,19 @@ app.post(
     // PROCESS SSE LINE
     // ========================================================
 
-    function processSSELine(
-      line
-    ) {
-
+    function processSSELine(line) {
       line =
-        line.replace(
-          /\r$/,
-          ""
-        );
+        line.replace(/\r$/, "");
 
-      if (
-        !line.trim()
-      ) {
-
+      if (!line.trim()) {
         return;
       }
 
-      if (
-        line.startsWith(":")
-      ) {
-
+      if (line.startsWith(":")) {
         return;
       }
 
-      if (
-        !line.startsWith(
-          "data:"
-        )
-      ) {
-
+      if (!line.startsWith("data:")) {
         return;
       }
 
@@ -2211,37 +1383,22 @@ app.post(
           .slice(5)
           .trim();
 
-      if (
-        raw ===
-        "[DONE]"
-      ) {
-
+      if (raw === "[DONE]") {
         finishStream();
-
         return;
       }
 
       let parsed;
 
       try {
-
         parsed =
-          JSON.parse(
-            raw
-          );
+          JSON.parse(raw);
 
-      } catch (
-        error
-      ) {
-
+      } catch (error) {
         console.error(
           "[SSE JSON Parse Error]",
           error.message,
-
-          raw.substring(
-            0,
-            500
-          )
+          raw.substring(0, 500)
         );
 
         return;
@@ -2251,44 +1408,21 @@ app.post(
       // NORMALIZE RESPONSE
       // ======================================================
 
-      if (
-        Array.isArray(
-          parsed.choices
-        )
-      ) {
-
-        for (
-          const choice of
-          parsed.choices
-        ) {
-
-          if (
-            choice?.delta
-          ) {
-
-            // Do not modify DavidAU here because that model
-            // already uses the raw passthrough above.
+      if (Array.isArray(parsed.choices)) {
+        for (const choice of parsed.choices) {
+          if (choice?.delta) {
 
             if (
-              typeof choice.delta.content ===
-                "string" &&
-
-              selectedModel.id !==
-                "llama3.3-8b-heretic"
+              typeof choice.delta.content === "string"
             ) {
-
               choice.delta.content =
                 stripThinkTags(
                   choice.delta.content
                 );
             }
 
-            if (
-              !SHOW_REASONING
-            ) {
-
+            if (!SHOW_REASONING) {
               delete choice.delta.reasoning;
-
               delete choice.delta.reasoning_content;
             }
           }
@@ -2299,9 +1433,7 @@ app.post(
       // SEND TO CLIENT
       // ======================================================
 
-      writeSSE(
-        parsed
-      );
+      writeSSE(parsed);
     }
 
     // ========================================================
@@ -2311,44 +1443,28 @@ app.post(
     upstreamResponse.data.on(
       "data",
       chunk => {
-
         if (
           finished ||
           res.writableEnded
         ) {
-
           return;
         }
 
         buffer +=
-          chunk.toString(
-            "utf8"
-          );
+          chunk.toString("utf8");
 
         const lines =
-          buffer.split(
-            "\n"
-          );
+          buffer.split("\n");
 
         buffer =
-          lines.pop() ||
-          "";
+          lines.pop() || "";
 
-        for (
-          const line of
-          lines
-        ) {
-
-          if (
-            finished
-          ) {
-
+        for (const line of lines) {
+          if (finished) {
             break;
           }
 
-          processSSELine(
-            line
-          );
+          processSSELine(line);
         }
       }
     );
@@ -2360,14 +1476,8 @@ app.post(
     upstreamResponse.data.on(
       "end",
       () => {
-
-        if (
-          buffer.trim()
-        ) {
-
-          processSSELine(
-            buffer
-          );
+        if (buffer.trim()) {
+          processSSELine(buffer);
         }
 
         finishStream();
@@ -2381,7 +1491,6 @@ app.post(
     upstreamResponse.data.on(
       "error",
       error => {
-
         console.error(
           "[NVIDIA Stream Error]",
           error.message
@@ -2391,30 +1500,22 @@ app.post(
           finished ||
           res.writableEnded
         ) {
-
           return;
         }
 
         writeSSE({
-
           error: {
-
             message:
               error.message ||
               "NVIDIA streaming error",
 
-            type:
-              "stream_error"
+            type: "stream_error"
           }
         });
 
-        finished =
-          true;
+        finished = true;
 
-        if (
-          !res.writableEnded
-        ) {
-
+        if (!res.writableEnded) {
           res.end();
         }
       }
@@ -2427,21 +1528,13 @@ app.post(
     req.on(
       "close",
       () => {
-
-        if (
-          finished
-        ) {
-
+        if (finished) {
           return;
         }
 
-        finished =
-          true;
+        finished = true;
 
-        if (
-          upstreamResponse?.data?.destroy
-        ) {
-
+        if (upstreamResponse?.data?.destroy) {
           upstreamResponse.data.destroy();
         }
       }
@@ -2458,20 +1551,14 @@ app.use(
     req,
     res
   ) => {
-
-    if (
-      res.headersSent
-    ) {
-
+    if (res.headersSent) {
       return;
     }
 
     sendOpenAIError(
       res,
       404,
-
       `Endpoint ${req.path} not found`,
-
       "not_found"
     );
   }
@@ -2484,7 +1571,6 @@ app.use(
 app.listen(
   PORT,
   () => {
-
     console.log(
       "=================================================="
     );
@@ -2503,10 +1589,6 @@ app.listen(
 
     console.log(
       `NVIDIA API: ${NIM_API_BASE}`
-    );
-
-    console.log(
-      `Community NVIDIA API: ${COMMUNITY_NIM_API_BASE}`
     );
 
     console.log(
@@ -2541,13 +1623,7 @@ app.listen(
       "Configured models:"
     );
 
-    for (
-      const model of
-      Object.values(
-        MODELS
-      )
-    ) {
-
+    for (const model of Object.values(MODELS)) {
       console.log(
         `  ${model.id} -> ${model.upstream}`
       );
